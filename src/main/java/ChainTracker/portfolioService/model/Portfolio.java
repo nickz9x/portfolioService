@@ -1,22 +1,23 @@
 package ChainTracker.portfolioService.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @AllArgsConstructor
 @NoArgsConstructor
 public class Portfolio {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @EqualsAndHashCode.Include
     private String id;
-    private String owner;
-    @OneToMany(mappedBy = "portfolio",cascade = CascadeType.ALL)
-    private List<Position> positions = new ArrayList<>();
+    private String ownerId;
+    private String name;
+
 }

@@ -12,5 +12,13 @@ spring:
       host: localhost
       port: 6379
       type: redis
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/ChainTracker
+  jpa:
+    hibernate:
+      ddl-auto: update
 server:
   port: 8087

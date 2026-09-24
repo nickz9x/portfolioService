@@ -25,7 +25,7 @@ public class AssetService {
     private final RedisTemplate<String,Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private AssetRepository assetRepository;
-
+    private DataService dataService;
 
     @KafkaListener(
             topics = "market.updated",
@@ -33,7 +33,7 @@ public class AssetService {
     )
     public void consumeAsset(String payload){
         MarketResponse marketResponse = objectMapper.readValue(payload, MarketResponse.class);
-        System.out.println(marketResponse);
+
         redisTemplate.opsForValue().set("coin:"+marketResponse.id(), marketResponse, Duration.ofMinutes(2));
     }
 
@@ -47,6 +47,16 @@ public class AssetService {
             assetRepository.save(asset);
         }
     }
+    public MarketResponse getQuote(String assetId){
+        Object cached = redisTemplate.opsForValue().get("coin:" + assetId);
+        MarketResponse response = (MarketResponse) cached;
+        if (cached != null){
+            return response;
+        }
+        MarketResponse coin = dataService.getCoin(assetId);
+        redisTemplate.opsForValue().set("coin:"+assetId, coin,Duration.ofMinutes(2));
+        return coin;
+    };
 
     public Asset findByAssetId(String assetId){
         return assetRepository.findByAssetId(assetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));

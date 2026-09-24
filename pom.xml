@@ -36,6 +36,14 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
+		<!-- RestClient. No Spring Boot 4 a auto-configuracao saiu do
+		     spring-boot-autoconfigure e virou um modulo proprio, que o
+		     starter-web nao traz. Sem isso nao existe RestClient.Builder. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-restclient</artifactId>
+		</dependency>
+
 		<!-- Validation -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
