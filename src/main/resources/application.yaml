@@ -1,0 +1,16 @@
+
+spring:
+  application:
+    name: portfolioService
+  datasource:
+    url: jdbc:postgresql://localhost:5434/portfolioService
+    username: user
+    password: postgres
+  data:
+    redis:
+      password: admin
+      host: localhost
+      port: 6379
+      type: redis
+server:
+  port: 8087
