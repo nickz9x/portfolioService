@@ -2,11 +2,13 @@ package ChainTracker.portfolioService.service;
 
 import ChainTracker.portfolioService.client.AssetMarketDataClient;
 import ChainTracker.portfolioService.dto.MarketResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class DataService {
-    private AssetMarketDataClient client;
+    private final AssetMarketDataClient client;
 
 
 
