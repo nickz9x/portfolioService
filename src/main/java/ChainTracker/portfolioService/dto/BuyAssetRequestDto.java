@@ -1,4 +1,6 @@
 package ChainTracker.portfolioService.dto;
 
-public record BuyAssetRequestDto() {
+import jakarta.validation.constraints.NotBlank;
+
+public record BuyAssetRequestDto(@NotBlank String assetId, @NotBlank String portfolio) {
 }

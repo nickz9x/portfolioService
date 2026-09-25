@@ -1,4 +1,6 @@
 package ChainTracker.portfolioService.dto;
 
-public record PositionResponseDto() {
+import java.math.BigDecimal;
+
+public record PositionResponseDto(String assetId, String symbol, String name, BigDecimal quantity,BigDecimal averagePrice,BigDecimal pnl) {
 }
