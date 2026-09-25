@@ -1,6 +1,6 @@
 # Pendências — portfolioService
 
-Atualizado: 2026-09-24
+Atualizado: 2026-09-25
 
 ---
 
@@ -9,7 +9,7 @@ Atualizado: 2026-09-24
 Serviço de portfólio de cripto do projeto **ChainTracker**. Guarda carteiras e
 posições por usuário, com o preço vindo de um serviço de mercado.
 
-**Stack:** Spring Boot 4.1.1, Java 21, PostgreSQL, Redis, Kafka, Flyway, Keycloak (JWT).
+**Stack:** Spring Boot 4.1.1, Java 21, PostgreSQL, Redis, Kafka, Keycloak (JWT).
 
 **Portas:**
 
@@ -21,6 +21,7 @@ posições por usuário, com o preço vindo de um serviço de mercado.
 | portfolioService | 8087 |
 | Postgres do portfolio | 5434 |
 | Postgres do identity | 5432 |
+| Postgres do asset | 5433 |
 | Redis | 6379 |
 
 **Como a autenticação funciona:** o usuário loga no identity-service, que repassa
@@ -32,98 +33,111 @@ Não existe FK entre os serviços; a referência é por valor.
 
 ## 🔴 Bloqueadores
 
-### 1. O schema não existe — `relation "portfolio" does not exist`
+### 1. O schema vem do Hibernate, não de migration
 
-**Estado:** erro atual, ao chamar `POST /api/portfolio`.
+**Estado:** destravado, mas com duas fontes de verdade.
 
-**Causa:** não existe *nada* que crie as tabelas.
+Histórico: o schema não existia (nada criava as tabelas). O atalho foi ligado —
+`spring.jpa.hibernate.ddl-auto: update` no `application.yaml:22` — e agora é o
+Hibernate que cria `portfolio`, `asset` e `position` a partir das entidades.
 
-- `src/main/resources/` só tem `application.yaml` — não existe pasta `db/migration`
-  nem nenhuma migration escrita.
-- O Flyway está no `pom.xml` como biblioteca, mas **não há migration nenhuma para ele rodar**.
-- O `ddl-auto` do Hibernate, para banco não-embarcado (PostgreSQL), é `none` por
-  padrão, e o `application.yaml` não define outro valor. Então o Hibernate também
-  não cria as tabelas.
+Depois disso as dependências do **Flyway foram removidas do `pom.xml`**, e a
+pasta `src/main/resources/db/migration/` ficou órfã (ver item 3).
 
-**Não verificado:** há uma suspeita de que o Spring Boot 4 também exija o módulo
-`spring-boot-flyway` (mesmo padrão do bug do RestClient, que precisou de
-`spring-boot-restclient`). A verificação foi interrompida — **conferir antes de
-escrever a migration**, senão ela é escrita e o Flyway continua não rodando:
+**Consequência:** o schema é um efeito colateral do código Java. Não há histórico
+de mudanças, não dá para revisar uma alteração de schema em code review, e
+`ddl-auto: update` **nunca remove nada** — só adiciona. Foi exatamente isso que
+produziu o item 2.
 
-```bash
-ls ~/.m2/repository/org/springframework/boot/ | grep -i flyway
-./mvnw -o dependency:tree | grep -i flyway
-```
+**Fix (quando o Flyway voltar):**
 
-Se o modulo `spring-boot-flyway` nao existir no classpath, adicionar no `pom.xml`,
-igual foi feito com `spring-boot-restclient`.
+1. Escrever `V1__create_tables.sql` com as três tabelas.
+2. Trocar `ddl-auto` para `validate` — o Flyway cria, o Hibernate só confere.
+3. Lembrar que no Spring Boot 4 a auto-configuração do Flyway saiu do
+   `spring-boot-autoconfigure` e virou o módulo `spring-boot-flyway`. Conferir
+   se está no classpath antes de escrever a migration, senão ela não roda:
 
-**Fix:**
-
-1. Confirmar o módulo do Flyway (acima).
-2. Escrever `src/main/resources/db/migration/V1__create_tables.sql` com as tabelas
-   `portfolio`, `asset` e `position`, com `owner_id` em portfolio e as FKs
-   `portfolio_id` / `asset_id` em position.
-3. Definir `spring.jpa.hibernate.ddl-auto: validate` no `application.yaml` —
-   o Flyway cria o schema, o Hibernate só confere se as entidades batem.
-
-**Atalho para destravar agora (não serve para produção):**
-`spring.jpa.hibernate.ddl-auto: update` faz o Hibernate criar as tabelas a partir
-das entidades. Resolve em 1 minuto, mas aí o schema tem duas fontes de verdade.
+   ```bash
+   ./mvnw -o dependency:tree | grep -i flyway
+   ```
 
 ---
 
-### 2. A tabela `asset` nunca é populada
+### 2. O banco tem uma constraint que a entidade não declara
 
-**Estado:** descoberto, ainda não corrigido.
+**Estado:** inconsistência ativa, descoberta em 2026-09-25.
 
-`AssetService.save(AssetRequestDto)` (`AssetService.java:41`) **não é chamado por
-ninguém** — não há controller nem listener que o invoque.
+O banco tem `UNIQUE (asset_id)` na tabela `asset`, com o nome gerado pelo
+Hibernate: `uk17bgdxenhefny6036bllfv86g`. Verificado e enforced — um `INSERT`
+duplicado é rejeitado.
 
-Consequência: a tabela `asset` fica vazia, e
-`assetService.findByAssetId(assetId)` (`PositionService.java:26`) sempre cai no
-`orElseThrow` e devolve 404. O fluxo de criar posição vai falhar sempre.
+Mas `Asset.java` **não tem** `@Column(unique = true)`. A anotação existiu e foi
+removida; o Hibernate não remove constraint sozinho, então ela ficou para trás.
 
-O `KafkaListener` `consumeAsset` (`AssetService.java:34`) recebe o mercado e grava
-**só no Redis** — não persiste o `Asset`.
+**Consequência:** o banco e o código discordam. Se as tabelas forem recriadas
+(drop + restart), a constraint **não volta** — e aí duas linhas com o mesmo
+`asset_id` quebram toda leitura seguinte, porque `findByAssetId` devolve
+`Optional<Asset>` e o Spring Data não monta `Optional` a partir de duas linhas
+(`IncorrectResultSizeDataAccessException`).
 
-**Fix:** decidir onde o `Asset` nasce. Duas opções:
-- Chamar `assetService.save(...)` de dentro do `consumeAsset` (o Asset entra no
-  banco junto com o primeiro preço que chega do Kafka), ou
-- Criar um endpoint que receba `AssetRequestDto`.
-
-A opção do listener é a mais natural: a entidade já chega pronta no payload.
+**Fix:** decidir onde a verdade mora.
+- Se a unicidade é regra de domínio → devolver `@Column(unique = true)` na
+  entidade e recriar o schema.
+- Se é regra de banco → escrever na migration (item 1) e nunca confiar no
+  `ddl-auto`.
 
 ---
 
-### 3. Client secret do Keycloak commitado no git
+### 3. A migration em `db/migration/` está morta e, se ligada, quebra
+
+**Estado:** arquivo existe, não roda.
+
+`src/main/resources/db/migration/V1__add_asset_unique_constraint.sql` foi escrito
+para adicionar `uk_asset_asset_id`. Hoje ele tem dois problemas:
+
+1. **Não roda.** As dependências do Flyway saíram do `pom.xml`, então nada lê
+   essa pasta.
+2. **Se o Flyway for religado, ele quebra de duas formas:**
+   - Em banco novo, migrations rodam **antes** do Hibernate. O `ALTER TABLE asset`
+     falha porque a tabela ainda não existe.
+   - O guard do arquivo procura por `conname = 'uk_asset_asset_id'`, mas a
+     constraint real se chama `uk17bgdxenhefny6036bllfv86g`. O guard dá falso, o
+     `ALTER` roda, e como o Postgres aceita duas constraints únicas na mesma
+     coluna, ele cria um **índice único redundante em silêncio** — sem erro.
+
+**Fix:** reescrever junto com o item 1. Ou apagar, se a unicidade voltar para a
+entidade.
+
+---
+
+### 4. Client secret do Keycloak commitado no git
 
 **Onde:** `identity-service/src/main/resources/application.yaml`, linha 19
 (`security.client-secret`).
 
-**Situação:** o arquivo é rastreado pelo git, o `.gitignore` não cobre, e o valor
-está no **histórico** — commits `87b6279`, `6bb01fb` e `90d8366`.
+**Situação:** o arquivo é rastreado, o `.gitignore` não cobre, e os valores estão
+no histórico — o **antigo** nos commits `87b6279`, `d124220` e `6bb01fb`, e o
+**novo** a partir do commit que rotacionou o secret. Os repositórios são privados,
+o que limita o alcance, mas quem já clonou tem os dois valores.
 
 **Fix:**
 
 1. Trocar por variável de ambiente:
    `security.client-secret: ${KEYCLOAK_CLIENT_SECRET}`
 2. Registrar a variável na config da IDE e cobrir `.env` no `.gitignore`.
-3. **Rotacionar o secret no Keycloak** — gerar um novo e invalidar o antigo.
-
-O passo 3 é o que resolve de verdade: tirar do arquivo não apaga o histórico, e
-quem clonou o repo já tem o valor. Reescrever histórico com `filter-repo` só
-compensa se o repositório for público.
+3. **Rotacionar de novo no Keycloak** e desta vez não commitar o valor. Tirar do
+   arquivo não apaga o histórico; reescrever com `filter-repo` só compensa se o
+   repositório virar público.
 
 ---
 
 ## 🟡 Importante
 
-### 4. `UNIQUE (portfolio_id, asset_id)` na tabela position
+### 5. `UNIQUE (portfolio_id, asset_id)` na tabela position
 
-O `@Transactional` que está no `createPosition` **não impede** duas compras
-simultâneas do mesmo asset criarem duas linhas. Com `READ_COMMITTED`, as duas
-transações leem "não existe" antes de qualquer uma commitar, e as duas inserem.
+O `@Transactional` do `createPosition` **não impede** duas compras simultâneas do
+mesmo asset criarem duas linhas. Com `READ_COMMITTED`, as duas transações leem
+"não existe" antes de qualquer uma commitar, e as duas inserem.
 
 Quem resolve é o banco:
 
@@ -135,29 +149,31 @@ ALTER TABLE position ADD CONSTRAINT uk_position_portfolio_asset
 Depois disso a segunda transação toma erro de constraint — tratar como
 "concorrência, recarrega e soma" em vez de deixar passar.
 
-### 5. `UNIQUE (owner_id)` ou índice em `owner_id`
+### 6. `UNIQUE (owner_id)` ou índice em `owner_id`
 
 Usado pra listar os portfolios do usuário. Decidir:
 - **1 portfolio por usuário** → `UNIQUE (owner_id)` fecha a questão.
 - **Vários** → índice simples em `owner_id`, senão é full scan.
 
-Vai na migration do item 1.
+### 7. `createPosition` devolve `pnl` fixo em zero
 
-### 6. Endpoint de listagem — `GET /api/portfolio`
+`PositionService.java:50` monta o `PositionResponseDto` com `BigDecimal.ZERO` no
+último campo, que é o `pnl`. O `averagePrice` já vem do `quote.currentPrice()`,
+mas o PnL não é calculado — a posição acabou de ser criada, então o correto seria
+`0` **de verdade** (preço atual = preço médio) ou o valor de `calculePNL`.
+Hoje é um zero literal que não passou por cálculo nenhum.
+
+### 8. `GET /api/portfolio` — listagem de portfolios
 
 `PortfolioRepository.findByOwnerId` já existe, mas nenhum controller expõe.
 Deve usar `jwt.getSubject()` como `ownerId`, nunca um parâmetro do request.
 
-### 7. Controller de posição (não existe)
+### 9. `sellAsset` e `calculePNL` não têm caminho de escrita
 
-`PositionService.createPosition` passou a exigir um quarto parâmetro
-`String ownerId` (mudança feita para fechar o furo do `findById` sem dono).
-Não há controller chamando — quando criar, passar `jwt.getSubject()`.
+`Position.sellAsset` continua sem endpoint. O `calculePNL` agora é alcançado pela
+listagem, mas a venda não — e é ela que fecha o ciclo da carteira.
 
-Como efeito, `Position.sellAsset` e `Position.calculePNL` estão escritos e testados
-na lógica, mas **nenhum caminho de código os alcança** ainda.
-
-### 8. `POST /api/auth/refresh` no identity
+### 10. `POST /api/auth/refresh` no identity
 
 O identity só tem `/register` e `/login`. Falta o refresh, que é o que permite o
 front renovar o access token sem pedir senha de novo (o refresh token dura 30 min,
@@ -167,56 +183,56 @@ o access token só 5).
 
 ## 🔵 Limpeza
 
-### 9. `spring-boot-starter-test` declarado duas vezes no `pom.xml`
+### 11. `BuyAssetRequestDto` é código morto
 
-Por volta da linha 148. O Maven avisa:
+`dto/BuyAssetRequestDto.java` só aparece na própria definição — nenhum controller,
+service ou import usa. Ou vira o request de uma venda/compra futura, ou sai.
+
+### 12. Imports órfãos
+
+- `controller/PortfolioController.java:5-6` — `PositionRequestDto` e `Position`,
+  adicionados e nunca usados.
+- `model/Asset.java:6` — `java.math.BigDecimal`, sem campo BigDecimal na entidade.
+- `AssetService.java` — conferir `AssetRequestDto`, `KafkaListener` (foram
+  removidos numa limpeza anterior; confirmar que não voltaram).
+
+### 13. `spring-boot-starter-test` declarado duas vezes no `pom.xml`
+
+O Maven avisa no build:
 
 > `'dependencies.dependency.(groupId:artifactId:type:classifier)' must be unique`
 > ... future Maven versions might no longer support building such malformed projects
 
 Remover a segunda declaração.
 
-### 10. Imports órfãos
-
-- `Portfolio.java:6-7` — `java.util.ArrayList` e `java.util.List`
-- `AssetService.java` — `Portfolio` (6), `Position` (7), `PortfolioRepository` (9),
-  `Header` (14), `BigDecimal` (19)
-
-### 11. `spring.jpa.open-in-view`
+### 14. `spring.jpa.open-in-view`
 
 O log avisa que está ligado por padrão. Como a coleção `List<Position>` foi
 removida do `Portfolio`, não há mais necessidade de lazy loading fora da
 transação. Definir `spring.jpa.open-in-view: false` para silenciar e evitar
 query acidental na serialização.
 
-### 12. identity-service — config hardcoded e import órfão
+### 15. `existsByassetId` — nome com 'a' minúsculo
 
-- `serverUrl`, `realm` e `clientId` repetidos em 3 lugares: `UserService` (2x) e
-  `KeycloakAdminConfiguration`. Já existe `@Value` no projeto — puxar tudo pra config.
-- `UserService` importa `AllArgsConstructor` (linha 7) mas usa `@RequiredArgsConstructor`.
-
-### 13. `existsByassetId` — nome com 'a' minúsculo
-
-`AssetRepository.java:10` e `AssetService.java:42`. Funciona (o Spring Data deriva
-do nome exato), mas o padrão é `existsByAssetId`. Renomear nos dois lados juntos.
+`AssetRepository.java` e `AssetService.java`. Funciona (o Spring Data deriva do
+nome exato), mas o padrão é `existsByAssetId`. Renomear nos dois lados juntos.
 
 ---
 
 ## 🧪 DX e testes
 
-### 14. Arquivo `api.http` para o IntelliJ
+### 16. Arquivo `api.http` para o IntelliJ
 
 Evita copiar token à mão. Roda o login, captura o `access_token` numa variável
-global e injeta nos requests seguintes. Conteúdo discutido na conversa — recriar
-quando voltar.
+global e injeta nos requests seguintes.
 
-### 15. Keycloak — lifespan do access token
+### 17. Keycloak — lifespan do access token
 
-O default de 300s (5 min) é atrapalha o desenvolvimento. **Desenvolvimento:**
-Realm settings → Tokens → Access Token Lifespan → 30 min. **Produção:** manter 300s
-e resolver com refresh token (item 8).
+O default de 300s (5 min) atrapalha o desenvolvimento. **Desenvolvimento:**
+Realm settings → Tokens → Access Token Lifespan → 30 min. **Produção:** manter
+300s e resolver com refresh token (item 10).
 
-### 16. Não existe teste de verdade
+### 18. Não existe teste de verdade
 
 Só o `PortfolioServiceApplicationTests` gerado pelo Initializr. Nada cobre
 `buyAsset`, `sellAsset` ou `calculePNL` — que são lógica pura, sem banco nem
@@ -226,20 +242,34 @@ Spring, e seriam os mais baratos de testar.
 
 ## ✅ Já resolvido (não refazer)
 
+- **A tabela `asset` agora é populada.** `AssetService.findOrCreate` registra o
+  asset no primeiro uso, chamado de dentro do `createPosition`. O `findByAssetId`
+  deixou de cair sempre no `orElseThrow`.
+- **`DataService` com injeção nula.** O campo `client` não tinha `final`,
+  construtor nem `@Autowired` — ficava `null` e estourava NPE na primeira
+  chamada. Resolvido com `@RequiredArgsConstructor` + `private final`.
+- **N+1 do banco.** `Position.asset` é `@ManyToOne` (EAGER por padrão): carregava
+  N posições e disparava mais N consultas. Resolvido com
+  `@EntityGraph(attributePaths = "asset")` em `findAllByPortfolioId`.
+- **N+1 do Redis.** A listagem fazia uma ida ao cache por posição. Virou
+  `AssetService.getQuotes`, que resolve tudo com um `multiGet`.
+- **NPE do `calculePNL`.** Guardas para `currentPrice`, `averagePrice` e
+  `quantity` nulos, e para divisão por zero. `null` significa "não sei", `0`
+  significa "está no preço médio" — são coisas diferentes e o retorno preserva
+  a distinção.
+- **Controller de posição.** `PositionController` expõe
+  `POST`/`GET /api/portfolio/{id}/positions`, sempre com `jwt.getSubject()`.
 - Lista `List<Position>` removida do `Portfolio`. A FK vive em `Position`, e a
   escrita passou a ser por `positionRepository.save(position)`.
 - `@Data` → `@Getter/@Setter` + `@EqualsAndHashCode.Include` no id, nas 3 entidades.
 - `calculePNL` corrigido: era `A/(C-A)*100` (dava 1000% no lugar de 10%), virou
-  `(C-A)/A*100` com guard para divisão por zero.
-- `buyAsset` com média ponderada por valor — conferido.
-- `PositionRepository.findByPortfolioIdAndAssetId` — dedupe por portfolio + asset,
-  pra segunda compra somar em vez de criar linha nova.
+  `(C-A)/A*100`.
+- `buyAsset` com média ponderada por valor.
+- `PositionRepository.findByPortfolioIdAndAssetId` — dedupe por portfolio + asset.
 - `PortfolioService.findById(String)` **removido** — virou `findByIdAndOwner`.
   Busca por id sem dono era o principal furo (IDOR).
-- `createPortfolio(name, ownerId)` + `POST /api/portfolio` + DTOs de request/response.
-- `SecurityConfiguration` — faltava `@Bean` no `filterChain`, o que fazia o Spring
-  ignorar a config e cair na segurança padrão.
+- `createPortfolio(name, ownerId)` + `POST /api/portfolio` + DTOs.
+- `SecurityConfiguration` — faltava `@Bean` no `filterChain`.
 - `spring.security.oauth2.resourceserver.jwt.issuer-uri` no `application.yaml`.
-- `pom.xml` — adicionado `spring-boot-restclient`. No Spring Boot 4 a auto-config
-  do RestClient saiu do `spring-boot-autoconfigure` e virou módulo próprio, que o
-  `spring-boot-starter-web` não traz.
+- `pom.xml` — `spring-boot-restclient`. No Spring Boot 4 a auto-config do
+  RestClient saiu do `spring-boot-autoconfigure` e virou módulo próprio.
