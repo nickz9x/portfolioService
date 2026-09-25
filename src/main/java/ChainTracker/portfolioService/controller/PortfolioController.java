@@ -2,7 +2,9 @@ package ChainTracker.portfolioService.controller;
 
 import ChainTracker.portfolioService.dto.PortfolioRequestDto;
 import ChainTracker.portfolioService.dto.PortfolioResponseDto;
+import ChainTracker.portfolioService.dto.PositionRequestDto;
 import ChainTracker.portfolioService.model.Portfolio;
+import ChainTracker.portfolioService.model.Position;
 import ChainTracker.portfolioService.service.PortfolioService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
