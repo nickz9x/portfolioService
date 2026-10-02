@@ -7,6 +7,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PortfolioRepository extends JpaRepository<Portfolio, String> {
-    Optional<Portfolio> findByIdAndOwnerId(String id, String ownerId);
+    Optional<Portfolio> findByIdAndSymbol(String id, String symbol);
     List<Portfolio> findByOwnerId(String ownerId);
 }

@@ -1,5 +1,7 @@
 package ChainTracker.portfolioService.client;
 
+import ChainTracker.portfolioService.dto.AssetDataSimpleReponse;
+import ChainTracker.portfolioService.dto.CoinDataSimpleResponse;
 import ChainTracker.portfolioService.dto.MarketResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,11 +16,20 @@ public class AssetMarketDataClient {
         this.restClient = restClientBuilder.baseUrl(url).build();
     }
 
-    public MarketResponse getCoin(String id){
+    public CoinDataSimpleResponse getCoin(String assetId){
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/currency/{id}")
-                        .build(id)
-                ).retrieve().body(MarketResponse.class);
+                        .path("/internal/data/currency/{assetId}")
+                        .build(assetId)
+                ).retrieve().body(CoinDataSimpleResponse.class);
+    }
+
+        public AssetDataSimpleReponse getAsset(String symbol){
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/internal/data/stock/{symbol}")
+                        .build(symbol)
+                ).retrieve()
+                .body(AssetDataSimpleReponse.class);
     }
 }

@@ -28,27 +28,26 @@ public class PositionService {
     @Transactional
     public PositionResponseDto createPosition(String assetId, BigDecimal quantity, String portfolioId, String ownerId) {
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
-        MarketResponse quote = assetService.getQuote(assetId);
-        Asset asset = assetService.findOrCreate(quote);
+
         Optional<Position> byPortfolioIdAndAssetId = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), asset.getId());
-        if (byPortfolioIdAndAssetId.isPresent()){
-            Position position = byPortfolioIdAndAssetId.get();
-            position.buyAsset(quantity, quote.currentPrice());
-            positionRepository.save(position);
-        } else {
-            Position position = new Position();
-            position.setQuantity(quantity);
-            position.setAsset(asset);
-            position.setPortfolio(portfolio);
-            position.setAveragePrice(quote.currentPrice());
-            positionRepository.save(position);
-        }
-          return new PositionResponseDto(assetId,
-                asset.getSymbol(),
-                asset.getName(),
-                quantity,
-                quote.currentPrice(),BigDecimal.ZERO
-                );
+//        if (byPortfolioIdAndAssetId.isPresent()){
+//            Position position = byPortfolioIdAndAssetId.get();
+//            position.buyAsset(quantity, quote.currentPrice());
+//            positionRepository.save(position);
+//        } else {
+//            Position position = new Position();
+//            position.setQuantity(quantity);
+//            position.setAsset(asset);
+//            position.setPortfolio(portfolio);
+//            position.setAveragePrice(quote.currentPrice());
+//            positionRepository.save(position);
+//        }
+//          return new PositionResponseDto(assetId,
+//                asset.getSymbol(),
+//                asset.getName(),
+//                quantity,
+//                quote.currentPrice(),BigDecimal.ZERO
+//                );
     }
 
     public List<PositionResponseDto> findAllPositionByPortfolio(String portfolioId, String ownerId){

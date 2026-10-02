@@ -22,9 +22,13 @@ public class Position {
     @JoinColumn(name = "portfolio_id")
     private Portfolio portfolio;
 
-    @ManyToOne
-    @JoinColumn(name = "asset_id")
-    private Asset asset;
+    private String name;
+
+    private String assetId;
+
+    private String symbol;
+
+    private String exchange;
 
     private BigDecimal quantity;
 
