@@ -2,6 +2,7 @@ package ChainTracker.portfolioService.service;
 
 import ChainTracker.portfolioService.client.AssetMarketDataClient;
 import ChainTracker.portfolioService.dto.AssetDataSimpleReponse;
+import ChainTracker.portfolioService.dto.AssetMarketData;
 import ChainTracker.portfolioService.dto.CoinDataSimpleResponse;
 import ChainTracker.portfolioService.dto.MarketResponse;
 import lombok.RequiredArgsConstructor;
@@ -22,4 +23,8 @@ public class DataService {
         return client.getAsset(symbol);
     }
 
+    public MarketResponse getCoinMarketData(String assetId){
+        return client.getCoinMarketData(assetId);
+    }
+    public AssetMarketData getAssetMarketData(String symbol){return client.getAssetMarketData(symbol);}
 }

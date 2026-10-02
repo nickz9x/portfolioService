@@ -21,9 +21,9 @@ import java.util.List;
 public class PositionController {
     private PositionService positionService;
 
-    @PostMapping()
-    public ResponseEntity<PositionResponseDto> createPosition(@PathVariable String id, @RequestBody @Valid PositionRequestDto dto, @AuthenticationPrincipal Jwt jwt){
-       return ResponseEntity.ok(positionService.createPosition(dto.assetId(), dto.quantity(), id, jwt.getSubject()));
+    @PostMapping("/cripto")
+    public ResponseEntity<PositionResponseDto> createCryptoPosition(@PathVariable String id, @RequestBody @Valid PositionRequestDto dto, @AuthenticationPrincipal Jwt jwt){
+       return ResponseEntity.ok(positionService.createAssetPosition(dto.assetId(), dto.quantity(), id, jwt.getSubject()));
     }
 
     @GetMapping()

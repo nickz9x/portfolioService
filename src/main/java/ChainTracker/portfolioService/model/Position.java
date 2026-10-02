@@ -1,5 +1,6 @@
 package ChainTracker.portfolioService.model;
 
+import ChainTracker.portfolioService.enums.PositionType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,10 +31,14 @@ public class Position {
 
     private String exchange;
 
+    @Column(precision = 38, scale = 18)
     private BigDecimal quantity;
 
+    @Column(precision = 38, scale = 18)
     private BigDecimal averagePrice;
 
+    @Enumerated(EnumType.STRING)
+    private PositionType type;
 
     public void buyAsset(BigDecimal newQuantity,BigDecimal currentPrice){
         BigDecimal currentTotalValue = this.quantity.multiply(this.averagePrice);
@@ -43,7 +48,7 @@ public class Position {
         BigDecimal newTotalValue = currentTotalValue.add(newPurchaseValue);
 
         this.quantity = this.quantity.add(newQuantity);
-        this.averagePrice = newTotalValue.divide(this.quantity, 8, RoundingMode.HALF_UP);
+        this.averagePrice = newTotalValue.divide(this.quantity, 12,RoundingMode.HALF_UP);
     }
 
     public void sellAsset(BigDecimal quantityToSell) {
@@ -86,6 +91,16 @@ public class Position {
         if (price.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
-        return price.divide(averagePrice, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+        return price.divide(averagePrice, 12, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+    }
+
+    public BigDecimal positionValue(BigDecimal currentPrice){
+        return currentPrice.multiply(quantity).setScale(12,RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal pnlValue(BigDecimal currentPrice) {
+        return currentPrice
+                .subtract(averagePrice)
+                .multiply(quantity);
     }
 }
