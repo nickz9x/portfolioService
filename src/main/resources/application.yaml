@@ -19,6 +19,17 @@ spring:
           issuer-uri: http://localhost:8081/realms/ChainTracker
   jpa:
     hibernate:
-      ddl-auto: update
+      # O schema e responsabilidade das migrations em db/migration. O Hibernate
+      # so confere no boot se as entidades batem com o banco; quem divergir falha
+      # aqui, alto, em vez de ser ajustado em silencio.
+      ddl-auto: validate
+  flyway:
+    # O banco de dev ja existia quando o Flyway entrou (criado pelo ddl-auto),
+    # entao ele nao tem flyway_schema_history. O baseline adota esse banco na
+    # versao 1 sem reexecutar a V1 (que criaria tabelas ja existentes) e deixa
+    # a V2 rodar para corrigir o schema legado. Em banco vazio nada disso
+    # acontece: as migrations rodam normalmente desde a V1.
+    baseline-on-migrate: true
+    baseline-version: 1
 server:
   port: 8087

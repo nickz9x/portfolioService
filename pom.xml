@@ -93,7 +93,19 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Flyway -->
+		<!-- Flyway. No Spring Boot 4 a auto-configuracao saiu do
+		     spring-boot-autoconfigure e virou um modulo proprio, que o
+		     spring-boot-starter-flyway traz. O flyway-core 12 nao fala com o
+		     Postgres sozinho: precisa do modulo flyway-database-postgresql. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
 
 		<!-- Actuator -->
 		<dependency>
