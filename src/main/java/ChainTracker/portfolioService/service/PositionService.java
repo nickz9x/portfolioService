@@ -201,4 +201,76 @@ public class PositionService {
                 pnlPercentage,
                 totalValue);
     }
+
+    @Transactional
+    public PositionResponseDto createCryptoWithCustomPricePosition(String assetId, BigDecimal quantity, BigDecimal price, String portfolioId, String ownerId) {
+        Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
+        CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(assetId);
+        if (cryptoMarketData == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        BigDecimal currentPrice = cryptoMarketData.currentPrice();
+        Optional<Position> cryptoPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId);
+        if (cryptoPosition.isPresent()) {
+            Position position = cryptoPosition.get();
+            position.buyAsset(quantity, price);
+            position.setName(cryptoMarketData.name());
+            position.setType(PositionType.CRIPTO);
+            positionRepository.save(position);
+            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(),
+                    position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),
+                    position.pnlValue(currentPrice), position.calculePNL(currentPrice));
+
+        } else {
+            Position position = new Position();
+            position.setAssetId(assetId);
+            position.setQuantity(quantity);
+            position.setPortfolio(portfolio);
+            position.setSymbol(cryptoMarketData.symbol());
+            position.setName(cryptoMarketData.name());
+            position.setAveragePrice(price);
+            position.setType(PositionType.CRIPTO);
+            positionRepository.save(position);
+
+            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(),
+                    position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),
+                    position.pnlValue(currentPrice), position.calculePNL(currentPrice));
+        }
+    }
+    @Transactional
+    public PositionResponseDto createStockWithCustomPricePosition(String symbol, BigDecimal quantity, BigDecimal price, String portfolioId, String ownerId) {
+        Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
+        StockMarketData stockMarketData = dataService.getStockMarketData(symbol);
+        if (stockMarketData == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        StockDataResponse stockData = dataService.getStockData(symbol);
+        BigDecimal currentPrice = stockMarketData.currentPrice();
+        Optional<Position> stockPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), stockData.symbol());
+        if (stockPosition.isPresent()) {
+            Position position = stockPosition.get();
+            position.buyAsset(quantity, price);
+            position.setName(stockData.name());
+            position.setType(PositionType.STOCK);
+            positionRepository.save(position);
+            return new PositionResponseDto(stockData.symbol(), stockData.symbol(), stockData.name(),
+                    position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),
+                    position.pnlValue(currentPrice), position.calculePNL(currentPrice));
+
+        } else {
+            Position position = new Position();
+            position.setAssetId(stockData.symbol());
+            position.setQuantity(quantity);
+            position.setPortfolio(portfolio);
+            position.setSymbol(stockData.symbol());
+            position.setName(stockData.name());
+            position.setAveragePrice(price);
+            position.setType(PositionType.STOCK);
+            positionRepository.save(position);
+
+            return new PositionResponseDto(stockData.symbol(), stockData.symbol(), stockData.name(),
+                    position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),
+                    position.pnlValue(currentPrice), position.calculePNL(currentPrice));
+        }
+    }
 }
