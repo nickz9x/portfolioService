@@ -12,8 +12,14 @@ public class AssetMarketDataClient {
     private final RestClient restClient;
     private String url = "http://localhost:8082/api";
 
-    public AssetMarketDataClient(RestClient.Builder restClientBuilder) {
-        this.restClient = restClientBuilder.baseUrl(url).build();
+    // O interceptor repassa o Bearer token de quem chamou o portfolioService.
+    // Sem ele o client bate no assetMarketDataService anonimo, e as rotas
+    // /api/stock/** e /api/internal/** de la respondem 401.
+    public AssetMarketDataClient(RestClient.Builder restClientBuilder, JwtForwardingInterceptor jwtForwardingInterceptor) {
+        this.restClient = restClientBuilder
+                .baseUrl(url)
+                .requestInterceptor(jwtForwardingInterceptor)
+                .build();
     }
 
     public CoinDataSimpleResponse getCoin(String assetId){
