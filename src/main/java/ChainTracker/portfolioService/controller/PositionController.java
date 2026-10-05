@@ -34,4 +34,11 @@ public class PositionController {
     public ResponseEntity<List<PositionResponseDto>> viewAllPosition(@PathVariable String id, @AuthenticationPrincipal Jwt jwt){
         return ResponseEntity.ok(positionService.findAllPositionByPortfolio(id, jwt.getSubject()));
     }
+
+    @DeleteMapping("/delete")
+    public void sellPosition(@PathVariable String id,@RequestBody @Valid PositionRequestDto dto, @AuthenticationPrincipal Jwt jwt){
+        positionService.sellPosition(dto.assetId(),dto.quantity(),id, jwt.getSubject());
+    }
+
+
 }

@@ -60,6 +60,14 @@ public class PositionService {
     }
 
     @Transactional
+    public void sellPosition(String assetId, BigDecimal quantity, String portfolioId, String ownerId) {
+        Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
+        Position position = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId).orElseThrow(() -> new IllegalArgumentException("portfolio ou ativo invalido"));
+        position.sellAsset(quantity);
+    }
+
+
+    @Transactional
     public PositionResponseDto createStockPosition(String symbol, BigDecimal quantity, String portfolioId, String ownerId) {
         StockDataResponse stockData = dataService.getStockData(symbol);
         if (stockData == null) {
