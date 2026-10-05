@@ -1,9 +1,6 @@
 package ChainTracker.portfolioService.service;
 
-import ChainTracker.portfolioService.dto.CryptoMarketData;
-import ChainTracker.portfolioService.dto.PositionResponseDto;
-import ChainTracker.portfolioService.dto.StockDataResponse;
-import ChainTracker.portfolioService.dto.StockMarketData;
+import ChainTracker.portfolioService.dto.*;
 import ChainTracker.portfolioService.enums.PositionType;
 import ChainTracker.portfolioService.mapper.PositionMapper;
 import ChainTracker.portfolioService.model.Portfolio;
@@ -16,8 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -110,34 +107,98 @@ public class PositionService {
             return new PositionResponseDto(stockData.symbol(), stockData.symbol(), stockData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice), position.pnlValue(currentPrice), position.calculePNL(currentPrice));
         }
     }
+
     public List<PositionResponseDto> findAllPositionByPortfolio(String portfolioId, String ownerId) {
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
-        List<Position> positionList = positionRepository.findAllByPortfolioId(portfolio.getId());
         List<PositionResponseDto> responseDtos = new ArrayList<>();
-        for (Position position : positionList) {
-            if(position.getType() == PositionType.CRIPTO) {
-                CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(position.getAssetId());
-                if (cryptoMarketData == null) {
-                    throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-                }
-                BigDecimal currentPrice = cryptoMarketData.currentPrice();
-                PositionResponseDto response = PositionMapper.toResponse(position, currentPrice);
-                responseDtos.add(response);
-            }
-            else {
-                StockDataResponse stockData = dataService.getStockData(position.getSymbol());
-                if (stockData == null) {
-                    throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-                }
-                StockMarketData stockMarketData = dataService.getStockMarketData(stockData.symbol());
-                if (stockMarketData == null) {
-                    throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-                }
-                BigDecimal currentPrice = stockMarketData.currentPrice();
-                PositionResponseDto response = PositionMapper.toResponse(position, currentPrice);
-                responseDtos.add(response);
-            }
+        for (Position position : positionRepository.findAllByPortfolioId(portfolio.getId())) {
+            responseDtos.add(PositionMapper.toResponse(position, currentPriceOf(position)));
         }
         return responseDtos;
+    }
+
+    /**
+     * Preco atual da posicao, buscado no assetMarketDataService conforme o tipo.
+     * 404 quando o mercado nao devolve o dado — mesma regra do create.
+     */
+    private BigDecimal currentPriceOf(Position position) {
+        if (position.getType() == PositionType.CRIPTO) {
+            CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(position.getAssetId());
+            if (cryptoMarketData == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            }
+            return cryptoMarketData.currentPrice();
+        }
+        StockDataResponse stockData = dataService.getStockData(position.getSymbol());
+        if (stockData == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        StockMarketData stockMarketData = dataService.getStockMarketData(stockData.symbol());
+        if (stockMarketData == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return stockMarketData.currentPrice();
+    }
+
+    /**
+     * Par (posicao, desempenho). O placar anda junto da posicao que o gerou —
+     * com dois acumuladores soltos existe o risco de "melhor = BTC" guardado com
+     * o percentual do ETH.
+     */
+    private record Performer(Position position, BigDecimal pnlPercentage) {
+    }
+
+    public PositionTotalResume positionTotalResume(String portfolioId, String ownerId) {
+        Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
+
+        // Soma a partir do Position cru, e nao do PositionResponseDto: o DTO ja
+        // arredonda para 2 casas no construtor compacto, e somar valor de tela
+        // zeraria posicao pequena (0,004 viraria 0,00).
+        BigDecimal totalValue = BigDecimal.ZERO;
+        BigDecimal totalCost = BigDecimal.ZERO;
+        Performer best = null;
+        Performer worst = null;
+
+        for (Position position : positionRepository.findAllByPortfolioId(portfolio.getId())) {
+            BigDecimal currentPrice = currentPriceOf(position);
+            totalValue = totalValue.add(position.positionValue(currentPrice));
+            totalCost = totalCost.add(position.getAveragePrice().multiply(position.getQuantity()));
+
+            // Percentual, nao valor: "desempenho" e relativo. Pelo valor absoluto
+            // a maior posicao ganharia sempre, mesmo rendendo menos.
+            BigDecimal positionPnl = position.calculePNL(currentPrice);
+            // null = preco desconhecido. Fica fora do ranking em vez de entrar
+            // como 0 — nao saber o desempenho nao e o mesmo que nao ter desempenho.
+            if (positionPnl == null) {
+                continue;
+            }
+            // Vendida por completo (quantity 0): o calculePNL devolve 0, e esse 0
+            // ganharia de qualquer carteira no negativo. Nao concorre.
+            // A partir daqui quantity nao e null — o calculePNL ja barrou acima.
+            if (position.getQuantity().compareTo(BigDecimal.ZERO) == 0) {
+                continue;
+            }
+
+            if (best == null || positionPnl.compareTo(best.pnlPercentage()) > 0) {
+                best = new Performer(position, positionPnl);
+            }
+            if (worst == null || positionPnl.compareTo(worst.pnlPercentage()) < 0) {
+                worst = new Performer(position, positionPnl);
+            }
+        }
+
+        // Somar pnlValue de cada posicao da o mesmo que totalValue - totalCost,
+        // e o percentual da carteira e ponderado por valor, nao media dos percentuais.
+        BigDecimal pnlValue = totalValue.subtract(totalCost);
+        BigDecimal pnlPercentage = totalCost.compareTo(BigDecimal.ZERO) == 0
+                ? null
+                : pnlValue.divide(totalCost, 12, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+
+        return new PositionTotalResume(
+                best == null ? null : best.position().getSymbol(),
+                worst == null ? null : worst.position().getSymbol(),
+                pnlValue,
+                pnlPercentage,
+                totalValue);
     }
 }
