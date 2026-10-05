@@ -90,13 +90,11 @@ O identity só tem `/register` e `/login`. Falta o refresh, que é o que permite
 front renovar o access token sem pedir senha de novo (o refresh token dura 30 min,
 o access token só 5).
 
-### 19. `createStockPosition` — dois bugs de lógica
+### 20. Erros do assetMarketDataService não têm tratamento
 
-- O guard `if (stockMarketData == null)` está **depois** do
-  `stockMarketData.currentPrice()` — se vier null, dá NPE antes de chegar no 404.
-- No caminho de posição existente, o `setAveragePrice(currentPrice)` logo depois
-  do `buyAsset(...)` sobrescreve a média ponderada que o `buyAsset` acabou de
-  calcular — comprar o mesmo stock duas vezes perde o preço médio.
+O `RestClient` usa `.retrieve()`, que estoura `HttpClientErrorException` em 4xx/5xx
+do serviço de mercado. Nenhum caller trata — vira 500 na cara do usuário. Falta
+decidir o comportamento (502 com mensagem, retry, degradar a listagem sem preço).
 
 ---
 
@@ -138,11 +136,11 @@ O default de 300s (5 min) atrapalha o desenvolvimento. **Desenvolvimento:**
 Realm settings → Tokens → Access Token Lifespan → 30 min. **Produção:** manter
 300s e resolver com refresh token (item 10).
 
-### 18. Não existe teste de verdade
+### 18. Cobertura de teste ainda rasa
 
-Só o `PortfolioServiceApplicationTests` gerado pelo Initializr. Nada cobre
-`buyAsset`, `sellAsset` ou `calculePNL` — que são lógica pura, sem banco nem
-Spring, e seriam os mais baratos de testar.
+O `JwtForwardingInterceptorTest` cobre o repasse do token e o `PositionServiceTest`
+a média ponderada na compra repetida de stock e os 404s de mercado nulo. Continuam
+sem teste: `sellAsset`, `calculePNL` isolado e os fluxos com banco (`PortfolioService`).
 
 ---
 
@@ -212,3 +210,9 @@ Spring, e seriam os mais baratos de testar.
   métodos `getCryptoData`/`getStockData`/`getCryptoMarketData`/`getStockMarketData`
   e `createCryptoPosition`/`createStockPosition`. O enum `CRIPTO` e o path
   `/cripto` ficaram como estavam — são contrato (banco e front).
+- **`createStockPosition` sem NPE e com média certa:** guard antes do deref, o
+  `buyAsset` fica dono da média ponderada na compra repetida, e mercado nulo
+  agora vira 404 no create e na listagem (cripto e stock).
+- **Resposta do create devolve a posição como ela ficou:** `quantity` e
+  `averagePrice` são os totais da posição (antes devolvia só a compra), igual ao
+  que o `GET` já devolvia via `PositionMapper`.
