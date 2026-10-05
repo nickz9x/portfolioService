@@ -61,6 +61,30 @@ class PositionServiceTest {
     }
 
     @Test
+    void repeatStockBuyLooksUpByTheCanonicalSymbol() {
+        Portfolio portfolio = new Portfolio();
+        portfolio.setId(PORTFOLIO_ID);
+        when(portfolioService.findByIdAndOwner(PORTFOLIO_ID, OWNER_ID)).thenReturn(portfolio);
+        // request em minusculas, o mercado devolve o ticker canonico
+        when(dataService.getStockData("aapl")).thenReturn(new StockDataResponse("AAPL", "Apple", "NASDAQ"));
+        when(dataService.getStockMarketData("aapl")).thenReturn(new StockMarketData("AAPL", new BigDecimal("150"), null, null, null));
+
+        Position existing = new Position();
+        existing.setAssetId("AAPL");
+        existing.setQuantity(new BigDecimal("10"));
+        existing.setAveragePrice(new BigDecimal("100"));
+        existing.setType(PositionType.STOCK);
+        // a linha gravada esta sob "AAPL", nao sob o texto que veio no request
+        when(positionRepository.findByPortfolioIdAndAssetId(PORTFOLIO_ID, "AAPL")).thenReturn(Optional.of(existing));
+
+        PositionResponseDto response = positionService.createStockPosition("aapl", new BigDecimal("10"), PORTFOLIO_ID, OWNER_ID);
+
+        assertThat(existing.getQuantity()).isEqualByComparingTo("20");
+        assertThat(existing.getAveragePrice()).isEqualByComparingTo("125");
+        assertThat(response.quantity()).isEqualByComparingTo("20");
+    }
+
+    @Test
     void stockWithoutMarketDataReturns404() {
         Portfolio portfolio = new Portfolio();
         portfolio.setId(PORTFOLIO_ID);

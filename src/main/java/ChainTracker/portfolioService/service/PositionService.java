@@ -72,7 +72,12 @@ public class PositionService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         BigDecimal currentPrice = stockMarketData.currentPrice();
-        Optional<Position> stockPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), symbol);
+        // Busca pelo symbol canonico que voltou do mercado, nao pelo texto do
+        // request: e esse valor que vai no asset_id do insert, e a
+        // uk_position_portfolio_asset compara exatamente os dois. Buscando com o
+        // texto cru, "aapl" nao acha a linha gravada como "AAPL", o fluxo cai no
+        // else e o insert esbarra na constraint (500) no lugar de somar.
+        Optional<Position> stockPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), stockData.symbol());
         if (stockPosition.isPresent()) {
             Position position = stockPosition.get();
             position.buyAsset(quantity, currentPrice);
