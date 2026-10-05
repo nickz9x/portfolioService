@@ -67,16 +67,7 @@ public class Position {
         }
     }
 
-    /**
-     * PNL percentual sobre o preco medio. Devolve null quando nao da para calcular.
-     *
-     * Null aqui nao e o mesmo que zero. Zero significa "o ativo esta exatamente
-     * no preco medio" — uma afirmacao sobre o mercado. Null significa "nao sei",
-     * porque o preco atual nao chegou (o getCryptoData do assetMarketDataService pode devolver
-     * current_price nulo, por exemplo). Devolver zero no lugar de null faria o
-     * cliente ler uma posicao sem preco como uma posicao estavel, que e pior do
-     * que admitir que o dado falta.
-     */
+
     public BigDecimal calculePNL(BigDecimal currentPrice){
         if (currentPrice == null || this.averagePrice == null || this.quantity == null){
             return null;
