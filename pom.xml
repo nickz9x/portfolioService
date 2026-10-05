@@ -95,7 +95,6 @@
 
 		<!-- Flyway -->
 
-
 		<!-- Actuator -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -149,6 +148,26 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+
+			<!-- O JDK 23+ desligou o processamento implicito de anotacoes: o javac
+			     nao descobre mais o Lombok so porque ele esta no classpath, e sem
+			     os getters/setters gerados a compilacao vira uma chuva de
+			     "cannot find symbol". Declarar o Lombok como processor explicito
+			     traz o processamento de volta em qualquer JDK. A IDE nao sofria
+			     disso porque compila com as proprias configuracoes. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
