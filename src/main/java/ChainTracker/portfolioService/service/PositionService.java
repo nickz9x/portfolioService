@@ -42,7 +42,7 @@ public class PositionService {
             position.setName(cryptoMarketData.name());
             position.setType(PositionType.CRIPTO);
             positionRepository.save(position);
-            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), quantity, position.getAveragePrice(), position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
+            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
 
         } else {
             Position position = new Position();
@@ -55,7 +55,7 @@ public class PositionService {
             position.setType(PositionType.CRIPTO);
             positionRepository.save(position);
 
-            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), quantity, position.getAveragePrice(),position.positionValue(currentPrice),position.pnlValue(currentPrice) ,position.calculePNL(currentPrice));
+            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(),position.positionValue(currentPrice),position.pnlValue(currentPrice) ,position.calculePNL(currentPrice));
         }
     }
 
@@ -81,8 +81,7 @@ public class PositionService {
             position.setSymbol(stockData.symbol());
             position.setType(PositionType.STOCK);
             positionRepository.save(position);
-            //tem q refazer esse dto pra casar com dto das cripto
-            return new PositionResponseDto(stockData.symbol(),stockData.symbol(),stockData.name(),quantity,currentPrice,position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
+            return new PositionResponseDto(stockData.symbol(),stockData.symbol(),stockData.name(),position.getQuantity(),position.getAveragePrice(),position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
 
         } else {
             Position position = new Position();
@@ -95,7 +94,7 @@ public class PositionService {
             position.setAveragePrice(currentPrice);
             positionRepository.save(position);
 
-            return new PositionResponseDto(stockData.symbol(),stockData.symbol(),stockData.name(),quantity,currentPrice,position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
+            return new PositionResponseDto(stockData.symbol(),stockData.symbol(),stockData.name(),position.getQuantity(),position.getAveragePrice(),position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
         }
     }
     public List<PositionResponseDto> findAllPositionByPortfolio(String portfolioId, String ownerId) {
