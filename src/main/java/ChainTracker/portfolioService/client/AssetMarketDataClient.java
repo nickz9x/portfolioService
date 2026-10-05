@@ -1,9 +1,9 @@
 package ChainTracker.portfolioService.client;
 
-import ChainTracker.portfolioService.dto.AssetDataSimpleReponse;
-import ChainTracker.portfolioService.dto.AssetMarketData;
-import ChainTracker.portfolioService.dto.CoinDataSimpleResponse;
-import ChainTracker.portfolioService.dto.MarketResponse;
+import ChainTracker.portfolioService.dto.CryptoDataResponse;
+import ChainTracker.portfolioService.dto.CryptoMarketData;
+import ChainTracker.portfolioService.dto.StockDataResponse;
+import ChainTracker.portfolioService.dto.StockMarketData;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,39 +22,39 @@ public class AssetMarketDataClient {
                 .build();
     }
 
-    public CoinDataSimpleResponse getCoin(String assetId){
+    public CryptoDataResponse getCryptoData(String assetId){
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/data/currency/{assetId}")
                         .build(assetId)
-                ).retrieve().body(CoinDataSimpleResponse.class);
+                ).retrieve().body(CryptoDataResponse.class);
     }
 
-        public AssetDataSimpleReponse getAsset(String symbol){
+    public StockDataResponse getStockData(String symbol){
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/data/stock/{symbol}")
                         .build(symbol)
                 ).retrieve()
-                .body(AssetDataSimpleReponse.class);
+                .body(StockDataResponse.class);
     }
 
-    public MarketResponse getCoinMarketData(String assetId){
+    public CryptoMarketData getCryptoMarketData(String assetId){
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/currency/{assetId}")
                         .build(assetId)
                 ).retrieve()
-                .body(MarketResponse.class);
+                .body(CryptoMarketData.class);
     }
 
-    public AssetMarketData getAssetMarketData(String symbol){
+    public StockMarketData getStockMarketData(String symbol){
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/stock/{symbol}")
                         .build(symbol)
                         ).retrieve()
-                .body(AssetMarketData.class);
+                .body(StockMarketData.class);
     }
 
 }

@@ -1,10 +1,10 @@
 package ChainTracker.portfolioService.service;
 
 import ChainTracker.portfolioService.client.AssetMarketDataClient;
-import ChainTracker.portfolioService.dto.AssetDataSimpleReponse;
-import ChainTracker.portfolioService.dto.AssetMarketData;
-import ChainTracker.portfolioService.dto.CoinDataSimpleResponse;
-import ChainTracker.portfolioService.dto.MarketResponse;
+import ChainTracker.portfolioService.dto.CryptoDataResponse;
+import ChainTracker.portfolioService.dto.CryptoMarketData;
+import ChainTracker.portfolioService.dto.StockDataResponse;
+import ChainTracker.portfolioService.dto.StockMarketData;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,16 +15,16 @@ public class DataService {
 
 
 
-    public CoinDataSimpleResponse getCoin(String id){
-        return client.getCoin(id);
+    public CryptoDataResponse getCryptoData(String id){
+        return client.getCryptoData(id);
     }
 
-    public AssetDataSimpleReponse getAsset(String symbol){
-        return client.getAsset(symbol);
+    public StockDataResponse getStockData(String symbol){
+        return client.getStockData(symbol);
     }
 
-    public MarketResponse getCoinMarketData(String assetId){
-        return client.getCoinMarketData(assetId);
+    public CryptoMarketData getCryptoMarketData(String assetId){
+        return client.getCryptoMarketData(assetId);
     }
-    public AssetMarketData getAssetMarketData(String symbol){return client.getAssetMarketData(symbol);}
+    public StockMarketData getStockMarketData(String symbol){return client.getStockMarketData(symbol);}
 }

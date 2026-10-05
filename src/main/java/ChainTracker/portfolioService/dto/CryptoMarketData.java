@@ -6,7 +6,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-public record MarketResponse(String id,
+public record CryptoMarketData(String id,
                              String symbol,
                              String name,
                              @JsonProperty("current_price")

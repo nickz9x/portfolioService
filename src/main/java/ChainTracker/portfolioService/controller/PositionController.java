@@ -23,7 +23,7 @@ public class PositionController {
 
     @PostMapping("/cripto")
     public ResponseEntity<PositionResponseDto> createCryptoPosition(@PathVariable String id, @RequestBody @Valid PositionRequestDto dto, @AuthenticationPrincipal Jwt jwt){
-       return ResponseEntity.ok(positionService.createAssetPosition(dto.assetId(), dto.quantity(), id, jwt.getSubject()));
+       return ResponseEntity.ok(positionService.createCryptoPosition(dto.assetId(), dto.quantity(), id, jwt.getSubject()));
     }
 
     @PostMapping("/stock")
