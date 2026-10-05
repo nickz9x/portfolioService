@@ -1,6 +1,6 @@
 # Pendências — portfolioService
 
-Atualizado: 2026-09-25
+Atualizado: 2026-10-04
 
 ---
 
@@ -9,7 +9,8 @@ Atualizado: 2026-09-25
 Serviço de portfólio de cripto do projeto **ChainTracker**. Guarda carteiras e
 posições por usuário, com o preço vindo de um serviço de mercado.
 
-**Stack:** Spring Boot 4.1.1, Java 21, PostgreSQL, Redis, Kafka, Keycloak (JWT).
+**Stack:** Spring Boot 4.1.1, Java 21, PostgreSQL, Redis, Kafka, Keycloak (JWT),
+Flyway (schema em `src/main/resources/db/migration/`).
 
 **Portas:**
 
@@ -32,83 +33,6 @@ Não existe FK entre os serviços; a referência é por valor.
 ---
 
 ## 🔴 Bloqueadores
-
-### 1. O schema vem do Hibernate, não de migration
-
-**Estado:** destravado, mas com duas fontes de verdade.
-
-Histórico: o schema não existia (nada criava as tabelas). O atalho foi ligado —
-`spring.jpa.hibernate.ddl-auto: update` no `application.yaml:22` — e agora é o
-Hibernate que cria `portfolio`, `asset` e `position` a partir das entidades.
-
-Depois disso as dependências do **Flyway foram removidas do `pom.xml`**, e a
-pasta `src/main/resources/db/migration/` ficou órfã (ver item 3).
-
-**Consequência:** o schema é um efeito colateral do código Java. Não há histórico
-de mudanças, não dá para revisar uma alteração de schema em code review, e
-`ddl-auto: update` **nunca remove nada** — só adiciona. Foi exatamente isso que
-produziu o item 2.
-
-**Fix (quando o Flyway voltar):**
-
-1. Escrever `V1__create_tables.sql` com as três tabelas.
-2. Trocar `ddl-auto` para `validate` — o Flyway cria, o Hibernate só confere.
-3. Lembrar que no Spring Boot 4 a auto-configuração do Flyway saiu do
-   `spring-boot-autoconfigure` e virou o módulo `spring-boot-flyway`. Conferir
-   se está no classpath antes de escrever a migration, senão ela não roda:
-
-   ```bash
-   ./mvnw -o dependency:tree | grep -i flyway
-   ```
-
----
-
-### 2. O banco tem uma constraint que a entidade não declara
-
-**Estado:** inconsistência ativa, descoberta em 2026-09-25.
-
-O banco tem `UNIQUE (asset_id)` na tabela `asset`, com o nome gerado pelo
-Hibernate: `uk17bgdxenhefny6036bllfv86g`. Verificado e enforced — um `INSERT`
-duplicado é rejeitado.
-
-Mas `Asset.java` **não tem** `@Column(unique = true)`. A anotação existiu e foi
-removida; o Hibernate não remove constraint sozinho, então ela ficou para trás.
-
-**Consequência:** o banco e o código discordam. Se as tabelas forem recriadas
-(drop + restart), a constraint **não volta** — e aí duas linhas com o mesmo
-`asset_id` quebram toda leitura seguinte, porque `findByAssetId` devolve
-`Optional<Asset>` e o Spring Data não monta `Optional` a partir de duas linhas
-(`IncorrectResultSizeDataAccessException`).
-
-**Fix:** decidir onde a verdade mora.
-- Se a unicidade é regra de domínio → devolver `@Column(unique = true)` na
-  entidade e recriar o schema.
-- Se é regra de banco → escrever na migration (item 1) e nunca confiar no
-  `ddl-auto`.
-
----
-
-### 3. A migration em `db/migration/` está morta e, se ligada, quebra
-
-**Estado:** arquivo existe, não roda.
-
-`src/main/resources/db/migration/V1__add_asset_unique_constraint.sql` foi escrito
-para adicionar `uk_asset_asset_id`. Hoje ele tem dois problemas:
-
-1. **Não roda.** As dependências do Flyway saíram do `pom.xml`, então nada lê
-   essa pasta.
-2. **Se o Flyway for religado, ele quebra de duas formas:**
-   - Em banco novo, migrations rodam **antes** do Hibernate. O `ALTER TABLE asset`
-     falha porque a tabela ainda não existe.
-   - O guard do arquivo procura por `conname = 'uk_asset_asset_id'`, mas a
-     constraint real se chama `uk17bgdxenhefny6036bllfv86g`. O guard dá falso, o
-     `ALTER` roda, e como o Postgres aceita duas constraints únicas na mesma
-     coluna, ele cria um **índice único redundante em silêncio** — sem erro.
-
-**Fix:** reescrever junto com o item 1. Ou apagar, se a unicidade voltar para a
-entidade.
-
----
 
 ### 4. Client secret do Keycloak commitado no git
 
@@ -133,35 +57,22 @@ o que limita o alcance, mas quem já clonou tem os dois valores.
 
 ## 🟡 Importante
 
-### 5. `UNIQUE (portfolio_id, asset_id)` na tabela position
+### 5. `createPosition` não trata a violação da `uk_position_portfolio_asset`
 
-O `@Transactional` do `createPosition` **não impede** duas compras simultâneas do
-mesmo asset criarem duas linhas. Com `READ_COMMITTED`, as duas transações leem
-"não existe" antes de qualquer uma commitar, e as duas inserem.
-
-Quem resolve é o banco:
-
-```sql
-ALTER TABLE position ADD CONSTRAINT uk_position_portfolio_asset
-    UNIQUE (portfolio_id, asset_id);
-```
-
-Depois disso a segunda transação toma erro de constraint — tratar como
-"concorrência, recarrega e soma" em vez de deixar passar.
+A `UNIQUE (portfolio_id, asset_id)` agora existe (migrations `V1`/`V2`). Ela faz a
+segunda compra concorrente do mesmo ativo esbarrar em vez de criar linha
+duplicada — mas o `PositionService` ainda não trata o caso: o
+`DataIntegrityViolationException` sobe como 500. Tratar como "concorrência,
+recarrega e soma" em vez de deixar passar.
 
 ### 6. `UNIQUE (owner_id)` ou índice em `owner_id`
 
-Usado pra listar os portfolios do usuário. Decidir:
-- **1 portfolio por usuário** → `UNIQUE (owner_id)` fecha a questão.
-- **Vários** → índice simples em `owner_id`, senão é full scan.
+Decidido por ora: **vários portfolios por usuário** são permitidos (o
+`createPortfolio` não bloqueia duplicata e o `findByOwnerId` devolve `List`), então
+a `V3__add_portfolio_owner_id_index.sql` criou um **índice simples** em `owner_id`.
 
-### 7. `createPosition` devolve `pnl` fixo em zero
-
-`PositionService.java:50` monta o `PositionResponseDto` com `BigDecimal.ZERO` no
-último campo, que é o `pnl`. O `averagePrice` já vem do `quote.currentPrice()`,
-mas o PnL não é calculado — a posição acabou de ser criada, então o correto seria
-`0` **de verdade** (preço atual = preço médio) ou o valor de `calculePNL`.
-Hoje é um zero literal que não passou por cálculo nenhum.
+Se a regra de produto virar "1 portfolio por usuário", o caminho é uma migration
+nova com `UNIQUE (owner_id)` — que torna este índice redundante.
 
 ### 8. `GET /api/portfolio` — listagem de portfolios
 
@@ -179,22 +90,22 @@ O identity só tem `/register` e `/login`. Falta o refresh, que é o que permite
 front renovar o access token sem pedir senha de novo (o refresh token dura 30 min,
 o access token só 5).
 
+### 19. `createStockPosition` — dois bugs de lógica
+
+- O guard `if (stockMarketData == null)` está **depois** do
+  `stockMarketData.currentPrice()` — se vier null, dá NPE antes de chegar no 404.
+- No caminho de posição existente, o `setAveragePrice(currentPrice)` logo depois
+  do `buyAsset(...)` sobrescreve a média ponderada que o `buyAsset` acabou de
+  calcular — comprar o mesmo stock duas vezes perde o preço médio.
+
 ---
 
 ## 🔵 Limpeza
-
-### 11. `BuyAssetRequestDto` é código morto
-
-`dto/BuyAssetRequestDto.java` só aparece na própria definição — nenhum controller,
-service ou import usa. Ou vira o request de uma venda/compra futura, ou sai.
 
 ### 12. Imports órfãos
 
 - `controller/PortfolioController.java:5-6` — `PositionRequestDto` e `Position`,
   adicionados e nunca usados.
-- `model/Asset.java:6` — `java.math.BigDecimal`, sem campo BigDecimal na entidade.
-- `AssetService.java` — conferir `AssetRequestDto`, `KafkaListener` (foram
-  removidos numa limpeza anterior; confirmar que não voltaram).
 
 ### 13. `spring-boot-starter-test` declarado duas vezes no `pom.xml`
 
@@ -211,11 +122,6 @@ O log avisa que está ligado por padrão. Como a coleção `List<Position>` foi
 removida do `Portfolio`, não há mais necessidade de lazy loading fora da
 transação. Definir `spring.jpa.open-in-view: false` para silenciar e evitar
 query acidental na serialização.
-
-### 15. `existsByassetId` — nome com 'a' minúsculo
-
-`AssetRepository.java` e `AssetService.java`. Funciona (o Spring Data deriva do
-nome exato), mas o padrão é `existsByAssetId`. Renomear nos dois lados juntos.
 
 ---
 
@@ -273,3 +179,36 @@ Spring, e seriam os mais baratos de testar.
 - `spring.security.oauth2.resourceserver.jwt.issuer-uri` no `application.yaml`.
 - `pom.xml` — `spring-boot-restclient`. No Spring Boot 4 a auto-config do
   RestClient saiu do `spring-boot-autoconfigure` e virou módulo próprio.
+- **Schema agora vem de migration, não do Hibernate.** `spring-boot-starter-flyway`
+  + `flyway-database-postgresql` no `pom.xml`, `ddl-auto: validate` e
+  `baseline-on-migrate: true` (o banco de dev já existia sem histórico de
+  migration). A `V1` cria o schema da modelagem nova; a `V2` adota o banco
+  legado: solta a FK de `position.asset_id`, converte o id interno para o id
+  externo via tabela `asset` (1 → "bitcoin"), dropa a tabela `asset` e cria a
+  `uk_position_portfolio_asset`. Verificado nos dois caminhos: banco legado
+  (baseline + V2) e banco vazio (V1 + V2 + `validate` do Hibernate).
+- `model/Asset.java` e `repository/AssetRepository.java` deletados; a
+  unicidade que era deles virou `uk_position_portfolio_asset` na V2.
+- `V1__add_asset_unique_constraint.sql` apagada — a tabela `asset` não existe
+  mais.
+- **401 no fluxo de stock.** O `AssetMarketDataClient` chamava
+  `/api/stock/**` e `/api/internal/**` do assetMarketDataService sem token —
+  lá só `/api/currency/**` é público, e o fluxo de cripto escapava exatamente
+  por isso. Agora o `JwtForwardingInterceptor` repassa o Bearer do usuário nas
+  chamadas de saída (mais `JwtForwardingInterceptorTest` cobrindo os dois
+  casos).
+- **Build Maven quebrado no JDK 26.** O `JAVA_HOME` da máquina aponta para o
+  Corretto 26, e o JDK 23+ desligou o processamento implícito de anotações: o
+  Lombok parava de ser descoberto e a compilação virava uma chuva de
+  "cannot find symbol" nos getters/setters. Resolvido declarando o Lombok como
+  `annotationProcessorPaths` no `maven-compiler-plugin`. A IDE não sofria
+  porque compila com configurações próprias — só o `./mvnw` quebrava.
+- **`createPosition` devolve o `pnl` calculado** pelo `calculePNL` — o zero
+  literal saiu.
+- **Código morto removido** (zero referências): `AssetService`, `AssetRequestDto`,
+  `BuyAssetRequestDto`, `StockPositionResponseDto` — e o rascunho `CoinDataResponse`.
+- **Nomes de cripto/stock simetrizados:** `CryptoDataResponse`/`StockDataResponse`
+  (dados estáticos, sem cotação), `CryptoMarketData`/`StockMarketData` (cotação),
+  métodos `getCryptoData`/`getStockData`/`getCryptoMarketData`/`getStockMarketData`
+  e `createCryptoPosition`/`createStockPosition`. O enum `CRIPTO` e o path
+  `/cripto` ficaram como estavam — são contrato (banco e front).
