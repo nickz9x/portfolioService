@@ -64,10 +64,11 @@ public class PositionService {
         StockDataResponse stockData = dataService.getStockData(symbol);
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
         StockMarketData stockMarketData = dataService.getStockMarketData(symbol);
-        BigDecimal currentPrice = stockMarketData.currentPrice();
+
         if (stockMarketData == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
+        BigDecimal currentPrice = stockMarketData.currentPrice();
         Optional<Position> stockPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), symbol);
         if (stockPosition.isPresent()) {
             Position position = stockPosition.get();
@@ -76,7 +77,6 @@ public class PositionService {
             position.setExchange(stockData.exchange());
             position.setSymbol(stockData.symbol());
             position.setType(PositionType.STOCK);
-            position.setAveragePrice(currentPrice);
             positionRepository.save(position);
             //tem q refazer esse dto pra casar com dto das cripto
             return new PositionResponseDto(stockData.symbol(),stockData.symbol(),stockData.name(),quantity,currentPrice,position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
