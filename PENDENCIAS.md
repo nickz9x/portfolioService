@@ -1,6 +1,6 @@
 # Pendências — portfolioService
 
-Atualizado: 2026-10-04
+Atualizado: 2026-10-05
 
 ---
 
@@ -57,13 +57,22 @@ o que limita o alcance, mas quem já clonou tem os dois valores.
 
 ## 🟡 Importante
 
-### 5. `createPosition` não trata a violação da `uk_position_portfolio_asset`
+### 5. `createPosition` ainda não trata a violação da `uk_position_portfolio_asset`
 
-A `UNIQUE (portfolio_id, asset_id)` agora existe (migrations `V1`/`V2`). Ela faz a
-segunda compra concorrente do mesmo ativo esbarrar em vez de criar linha
-duplicada — mas o `PositionService` ainda não trata o caso: o
-`DataIntegrityViolationException` sobe como 500. Tratar como "concorrência,
-recarrega e soma" em vez de deixar passar.
+**O caso determinístico foi corrigido em 2026-10-05; falta o concorrente.**
+
+O que quebrava não era só concorrência. O `createStockPosition` buscava pelo
+texto cru do request e gravava o ticker canônico que volta do mercado: com
+`googl` na entrada, a busca não achava a linha gravada como `GOOGL`, o fluxo caía
+no `else`, e o `INSERT` esbarrava na constraint — 500 no lugar de somar. Corrigido
+buscando com `stockData.symbol()`, com `repeatStockBuyLooksUpByTheCanonicalSymbol`
+cobrindo a regressão.
+
+O caso **concorrente** (duas transações simultâneas, ambas passando pela busca
+antes de qualquer uma gravar) continua aberto — e não é um `try/catch`: com JPA o
+`INSERT` só vai pro banco no commit, **fora** do método, então envolver o `save()`
+num try não captura a exceção. Precisa de `saveAndFlush` dentro de uma transação
+`REQUIRES_NEW` (ou retry na camada de fora) para capturar, recarregar e somar.
 
 ### 6. `UNIQUE (owner_id)` ou índice em `owner_id`
 
@@ -79,10 +88,21 @@ nova com `UNIQUE (owner_id)` — que torna este índice redundante.
 `PortfolioRepository.findByOwnerId` já existe, mas nenhum controller expõe.
 Deve usar `jwt.getSubject()` como `ownerId`, nunca um parâmetro do request.
 
-### 9. `sellAsset` e `calculePNL` não têm caminho de escrita
+### 9. A venda existe, mas busca pela chave errada e erra o status
 
-`Position.sellAsset` continua sem endpoint. O `calculePNL` agora é alcançado pela
-listagem, mas a venda não — e é ela que fecha o ciclo da carteira.
+`Position.sellAsset` já tem endpoint (`DELETE /api/portfolio/{id}/positions/delete`).
+Três problemas:
+
+- **Busca com o `assetId` cru do request** — a mesma assimetria que quebrava o
+  create de stock. Com `googl` em vez de `GOOGL`, não acha a linha e lança
+  "portfolio ou ativo invalido". Aqui não dá para normalizar igual ao create:
+  o serviço não sabe se o ativo é cripto ou stock sem antes consultar o mercado.
+  Precisa de decisão (consultar por tipo? tentar as duas buscas?).
+- **Posição inexistente lança `IllegalArgumentException`**, que o Spring traduz
+  como **500**, não 404.
+- **`DELETE` com corpo de requisição.** Não é proibido, mas parte dos clientes
+  HTTP e proxies descartam o body do DELETE — o `assetId` e a `quantity` viajam
+  melhor em query params ou num `POST .../sell`.
 
 ### 10. `POST /api/auth/refresh` no identity
 
@@ -96,14 +116,55 @@ O `RestClient` usa `.retrieve()`, que estoura `HttpClientErrorException` em 4xx/
 do serviço de mercado. Nenhum caller trata — vira 500 na cara do usuário. Falta
 decidir o comportamento (502 com mensagem, retry, degradar a listagem sem preço).
 
+### 21. As rotas `/cripto` e `/stock` MUDARAM DE SIGNIFICADO
+
+Antes existiam duas rotas de criação, ambas com preço de mercado. Agora são
+quatro, e as duas antigas passaram a significar outra coisa:
+
+| Rota | Antes | Agora |
+|---|---|---|
+| `POST .../positions/cripto` | preço de mercado | **preço informado no request** |
+| `POST .../positions/stock` | preço de mercado | **preço informado no request** |
+| `POST .../positions/cripto/market` | — | preço de mercado |
+| `POST .../positions/stock/market` | — | preço de mercado |
+
+Quem já chamava `/cripto` ou `/stock` esperando preço de mercado agora cai no
+`PositionAnotherPriceDto` — que exige o campo `price` — e leva 400. Não há
+período de transição nem rota antiga preservada. **É mudança de contrato com o
+front**, e a PENDENCIAS anterior registrava explicitamente que `/cripto` era
+contrato. Confirmar com quem consome antes de subir.
+
+### 22. `PositionAnotherPriceDto.price` aceita null
+
+```java
+public record PositionAnotherPriceDto(@NotBlank String assetId,
+        @NotNull @Positive BigDecimal quantity, @Positive BigDecimal price) {}
+```
+
+`price` tem `@Positive` mas **não** `@NotNull` — e em Bean Validation uma
+constraint sozinha trata `null` como válido. Sem `@NotNull`, um request sem o
+campo `price` passa na validação e chega no service com `price` nulo, onde vira
+`setAveragePrice(null)` ou NPE dentro do `buyAsset`. É o mesmo buraco que o
+`quantity` já fecha com `@NotNull @Positive`. Adicionar `@NotNull`.
+
+### 23. `symbol` nulo cria linha duplicada em silêncio
+
+Se o serviço de mercado devolver um objeto válido com `symbol` nulo, o
+`createStockPosition` usa esse valor como `asset_id`. No Postgres, `NULL` **não
+colide** em unique constraint — dois `NULL` são considerados distintos. Então
+cada chamada insere uma linha nova, e nenhuma delas jamais vai ser encontrada
+pela busca, que soma por `asset_id`. Degrada para duplicatas silenciosas em vez
+de erro. O `stockData == null` é checado, mas `stockData.symbol()` não.
+
 ---
 
 ## 🔵 Limpeza
 
 ### 12. Imports órfãos
 
-- `controller/PortfolioController.java:5-6` — `PositionRequestDto` e `Position`,
-  adicionados e nunca usados.
+- `controller/PortfolioController.java:5,8` — `PositionRequestDto` e `Position`.
+- `controller/PositionController.java:6-8,12` — `Portfolio`, `Position`,
+  `PortfolioService` e `org.springframework.data.repository.query.Param`.
 
 ### 13. `spring-boot-starter-test` declarado duas vezes no `pom.xml`
 
@@ -120,6 +181,26 @@ O log avisa que está ligado por padrão. Como a coleção `List<Position>` foi
 removida do `Portfolio`, não há mais necessidade de lazy loading fora da
 transação. Definir `spring.jpa.open-in-view: false` para silenciar e evitar
 query acidental na serialização.
+
+### 24. `PositionDataResumeDto` declarado e sem uso
+
+`dto/PositionDataResumeDto.java` — zero referências no projeto. Ou passa a
+compor o `PositionTotalResume` (a lista por posição que o resumo não devolve),
+ou sai.
+
+### 25. O formatador de 2 casas está triplicado
+
+`PositionResponseDto.formatMoney` e `PositionResponseDto.formatPercentage` são
+idênticos entre si (mesmo `setScale(2, HALF_UP)` com guard de null), e
+`PositionTotalResume.toTwoDecimals` é a terceira cópia. Extrair para um único
+lugar evita que um DTO arredonde diferente do outro sem ninguém notar.
+
+### 26. `PortfolioService` → `PositionService` com `@Lazy`
+
+O `getResume` fez o `PortfolioService` depender do `PositionService`, que já
+depende do `PortfolioService` — ciclo quebrado com `@Lazy`. Funciona, mas o
+`PortfolioController` poderia orquestrar os dois serviços diretamente e o ciclo
+não existiria. Revisitar se a cadeia crescer.
 
 ---
 
@@ -138,9 +219,15 @@ Realm settings → Tokens → Access Token Lifespan → 30 min. **Produção:** 
 
 ### 18. Cobertura de teste ainda rasa
 
-O `JwtForwardingInterceptorTest` cobre o repasse do token e o `PositionServiceTest`
-a média ponderada na compra repetida de stock e os 404s de mercado nulo. Continuam
-sem teste: `sellAsset`, `calculePNL` isolado e os fluxos com banco (`PortfolioService`).
+7 testes no total. `JwtForwardingInterceptorTest` cobre o repasse do token;
+`PositionServiceTest` cobre a média ponderada na compra repetida de stock, a
+busca pelo ticker canônico (a regressão do 500) e os 404s de mercado nulo.
+
+Continuam **sem teste**: `positionTotalResume` (o método inteiro — melhor/pior
+performer, os dois `continue` do ranking, o percentual ponderado por valor),
+`sellPosition`, `createCryptoWithCustomPricePosition`,
+`createStockWithCustomPricePosition`, `findAllPositionByPortfolio` e os fluxos
+com banco (`PortfolioService`).
 
 ---
 
@@ -210,9 +297,40 @@ sem teste: `sellAsset`, `calculePNL` isolado e os fluxos com banco (`PortfolioSe
   métodos `getCryptoData`/`getStockData`/`getCryptoMarketData`/`getStockMarketData`
   e `createCryptoPosition`/`createStockPosition`. O enum `CRIPTO` e o path
   `/cripto` ficaram como estavam — são contrato (banco e front).
+  *(Desde 2026-10-05 o path `/cripto` mudou de significado — ver item 21.)*
 - **`createStockPosition` sem NPE e com média certa:** guard antes do deref, o
   `buyAsset` fica dono da média ponderada na compra repetida, e mercado nulo
   agora vira 404 no create e na listagem (cripto e stock).
 - **Resposta do create devolve a posição como ela ficou:** `quantity` e
   `averagePrice` são os totais da posição (antes devolvia só a compra), igual ao
   que o `GET` já devolvia via `PositionMapper`.
+- **`GET /api/portfolio/{id}/resume`** — resumo da carteira
+  (`PositionTotalResume`: melhor e pior performer, PnL e valor totais, percentual
+  ponderado). Fica no `PositionService` porque é ele que já tem os preços em mão
+  no loop da listagem; o `PortfolioService` só delega. Decisões que não são
+  óbvias, para não desfazer:
+  - Melhor/pior saem do `calculePNL` (**percentual**), não do `pnlValue`: pelo
+    valor absoluto a maior posição ganharia sempre, mesmo rendendo menos.
+  - Preço desconhecido (`calculePNL` nulo) e posição já vendida (`quantity` 0,
+    para a qual o `calculePNL` devolve `0`) ficam **fora do ranking** — um 0%
+    falso ganharia de uma carteira inteira no negativo.
+  - Empate fica com o primeiro que o banco devolver: não há `ORDER BY`.
+  - O total é somado a partir do `Position` **cru**, e o arredondamento para 2
+    casas acontece só no construtor compacto do DTO. Somar o
+    `PositionResponseDto` já formatado zeraria posição pequena (0,004 → 0,00).
+  - `null` continua `null` (carteira sem posição não tem performer nem
+    percentual) — não vira `0,00` nem `""`.
+- **`BigDecimal` é imutável.** `total.add(x)` sem atribuir descarta o resultado e
+  o acumulador fica em `ZERO` para sempre, sem estourar exceção. Era o bug do
+  resumo antes de existir `PositionTotalResume`. Vale para toda soma do serviço.
+- **O 500 do create de stock em posição existente.** Busca com o texto do request
+  e insert com o ticker canônico do mercado (`googl` não achava `GOOGL`) → caía no
+  `else` → `INSERT` batia na `uk_position_portfolio_asset`. Agora busca com
+  `stockData.symbol()`, coberto por teste.
+- **Laço duplicado na listagem e no resumo.** O `if/else` cripto/stock virou
+  `currentPriceOf(Position)`; `findAllPositionByPortfolioWithoutOwnerId`,
+  `calculateTotalValue` e `calculateTotalPnlValue` foram removidos — o resumo soma
+  numa passada só. De quebra sumiu a variante que não checava o dono.
+- **Verificado no banco de dev:** zero duplicatas em `(portfolio_id, asset_id)`,
+  então o erro do create não vinha de `Optional` com resultado múltiplo — e o
+  `IncorrectResultSizeDataAccessException` está descartado como causa.
