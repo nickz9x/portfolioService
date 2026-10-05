@@ -26,6 +26,10 @@ public class PositionController {
        return ResponseEntity.ok(positionService.createAssetPosition(dto.assetId(), dto.quantity(), id, jwt.getSubject()));
     }
 
+    @PostMapping("/stock")
+    public ResponseEntity<PositionResponseDto> createStockPosition(@PathVariable String id, @RequestBody @Valid PositionRequestDto dto, @AuthenticationPrincipal Jwt jwt){
+        return ResponseEntity.ok(positionService.createStockPosition(dto.assetId(), dto.quantity(), id, jwt.getSubject()));
+    }
     @GetMapping()
     public ResponseEntity<List<PositionResponseDto>> viewAllPosition(@PathVariable String id, @AuthenticationPrincipal Jwt jwt){
         return ResponseEntity.ok(positionService.findAllPositionByPortfolio(id, jwt.getSubject()));

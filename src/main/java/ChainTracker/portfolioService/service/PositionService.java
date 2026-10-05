@@ -52,6 +52,7 @@ public class PositionService {
             position.setSymbol(coinMarketData.symbol());
             position.setName(coinMarketData.name());
             position.setAveragePrice(coinMarketData.currentPrice());
+            position.setType(PositionType.CRIPTO);
             positionRepository.save(position);
 
             return new PositionResponseDto(assetId, coinMarketData.symbol(), coinMarketData.name(), quantity, position.getAveragePrice(),position.positionValue(currentPrice),position.pnlValue(currentPrice) ,position.calculePNL(currentPrice));
@@ -63,6 +64,7 @@ public class PositionService {
         AssetDataSimpleReponse staticData = dataService.getAsset(symbol);
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
         AssetMarketData assetMarketData = dataService.getAssetMarketData(symbol);
+        BigDecimal currentedPrice = assetMarketData.currentPrice();
         if (assetMarketData == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
@@ -75,21 +77,24 @@ public class PositionService {
             position.setExchange(staticData.exchange());
             position.setSymbol(staticData.symbol());
             position.setType(PositionType.STOCK);
+            position.setAveragePrice(currentedPrice);
             positionRepository.save(position);
             //tem q refazer esse dto pra casar com dto das cripto
-            return new PositionResponseDto(symbol, assetMarketData.symbol(), assetMarketData.name(), quantity, position.getAveragePrice(), position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
+            return new PositionResponseDto(staticData.symbol(),staticData.symbol(),staticData.name(),quantity,currentedPrice,position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
 
         } else {
             Position position = new Position();
-            position.setAssetId(assetId);
+            position.setAssetId(staticData.symbol());
             position.setQuantity(quantity);
             position.setPortfolio(portfolio);
-            position.setSymbol(assetMarketData.symbol());
-            position.setName(assetMarketData.name());
+            position.setSymbol(staticData.symbol());
+            position.setName(staticData.name());
             position.setAveragePrice(assetMarketData.currentPrice());
+            position.setType(PositionType.STOCK);
+            position.setAveragePrice(currentedPrice);
             positionRepository.save(position);
 
-            return new PositionResponseDto(assetId, assetMarketData.symbol(), assetMarketData.name(), quantity, position.getAveragePrice(),position.positionValue(currentPrice),position.pnlValue(currentPrice) ,position.calculePNL(currentPrice));
+            return new PositionResponseDto(staticData.symbol(),staticData.symbol(),staticData.name(),quantity,currentedPrice,position.positionValue(currentPrice),position.pnlValue(currentPrice),position.calculePNL(currentPrice));
         }
     }
     public List<PositionResponseDto> findAllPositionByPortfolio(String portfolioId, String ownerId) {
@@ -97,10 +102,19 @@ public class PositionService {
         List<Position> positionList = positionRepository.findAllByPortfolioId(portfolio.getId());
         List<PositionResponseDto> responseDtos = new ArrayList<>();
         for (Position position : positionList) {
-            MarketResponse coinMarketData = dataService.getCoinMarketData(position.getAssetId());
-            BigDecimal currentPrice = coinMarketData.currentPrice();
-            PositionResponseDto response = PositionMapper.toResponse(position,currentPrice);
-            responseDtos.add(response);
+            if(position.getType() == PositionType.CRIPTO) {
+                MarketResponse coinMarketData = dataService.getCoinMarketData(position.getAssetId());
+                BigDecimal currentPrice = coinMarketData.currentPrice();
+                PositionResponseDto response = PositionMapper.toResponse(position, currentPrice);
+                responseDtos.add(response);
+            }
+            else {
+                AssetDataSimpleReponse asset = dataService.getAsset(position.getSymbol());
+                AssetMarketData assetMarketData = dataService.getAssetMarketData(asset.symbol());
+                BigDecimal currentPrice = assetMarketData.currentPrice();
+                PositionResponseDto response = PositionMapper.toResponse(position, currentPrice);
+                responseDtos.add(response);
+            }
         }
         return responseDtos;
     }
