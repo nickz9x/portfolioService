@@ -1,0 +1,1 @@
+alter table position add column symbol varchar(10)

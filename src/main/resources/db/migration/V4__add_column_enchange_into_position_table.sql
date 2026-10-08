@@ -1,0 +1,1 @@
+alter table position add column exchange varchar(255)

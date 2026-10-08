@@ -1,0 +1,1 @@
+alter table position add column name varchar(255)
