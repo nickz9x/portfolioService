@@ -1,5 +1,6 @@
 package ChainTracker.portfolioService.service;
 
+import ChainTracker.portfolioService.dto.PortfolioResponseDto;
 import ChainTracker.portfolioService.dto.PositionTotalResume;
 import ChainTracker.portfolioService.model.Portfolio;
 import ChainTracker.portfolioService.repository.PortfolioRepository;
@@ -8,6 +9,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Service
 public class PortfolioService {
@@ -36,5 +39,10 @@ public class PortfolioService {
 
     public PositionTotalResume getResume(String portfolioId, String ownerId) {
         return positionService.positionTotalResume(portfolioId, ownerId);
+    }
+
+    public List<PortfolioResponseDto> listAllPortfolio(String ownerId){
+        return repository.findByOwnerId(ownerId).stream()
+                .map(portfolio -> new PortfolioResponseDto(portfolio.getId(), portfolio.getName())).toList();
     }
 }

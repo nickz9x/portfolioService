@@ -23,6 +23,9 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
   jpa:
+    # Desligado: a lista de posicoes saiu do Portfolio, entao nao ha lazy loading
+    # fora da transacao para segurar a sessao aberta.
+    open-in-view: false
     hibernate:
       # O schema e responsabilidade das migrations em db/migration. O Hibernate
       # so confere no boot se as entidades batem com o banco; quem divergir falha
