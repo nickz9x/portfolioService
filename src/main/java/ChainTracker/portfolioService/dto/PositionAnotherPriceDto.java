@@ -6,5 +6,5 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 
-public record PositionAnotherPriceDto(@NotBlank String assetId, @NotNull @Positive BigDecimal quantity, @Positive BigDecimal price) {
+public record PositionAnotherPriceDto(@NotBlank String assetId, @NotNull @Positive BigDecimal quantity,@NotNull @Positive BigDecimal price) {
 }
