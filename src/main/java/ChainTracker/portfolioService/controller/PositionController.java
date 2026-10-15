@@ -3,13 +3,9 @@ package ChainTracker.portfolioService.controller;
 import ChainTracker.portfolioService.dto.PositionAnotherPriceDto;
 import ChainTracker.portfolioService.dto.PositionRequestDto;
 import ChainTracker.portfolioService.dto.PositionResponseDto;
-import ChainTracker.portfolioService.model.Portfolio;
-import ChainTracker.portfolioService.model.Position;
-import ChainTracker.portfolioService.service.PortfolioService;
 import ChainTracker.portfolioService.service.PositionService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
-import org.springframework.data.repository.query.Param;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -46,9 +42,9 @@ public class PositionController {
         return ResponseEntity.ok(positionService.createStockWithCustomPricePosition(dto.assetId(), dto.quantity(), dto.price(),id, jwt.getSubject()));
     }
 
-    @DeleteMapping("/delete")
+    @PostMapping("/delete")
     public void sellPosition(@PathVariable String id,@RequestBody @Valid PositionRequestDto dto, @AuthenticationPrincipal Jwt jwt){
-        positionService.sellPosition(dto.assetId(),dto.quantity(),id, jwt.getSubject());
+        positionService.sellPosition(dto.type(),dto.assetId(),dto.quantity(),id, jwt.getSubject());
     }
 
 

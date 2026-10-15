@@ -3,6 +3,8 @@ package ChainTracker.portfolioService.model;
 import ChainTracker.portfolioService.enums.PositionType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -53,11 +55,11 @@ public class Position {
 
     public void sellAsset(BigDecimal quantityToSell) {
         if (quantityToSell.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("A quantidade a vender deve ser maior que zero.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"A quantidade a vender deve ser maior que zero.");
         }
 
         if (quantityToSell.compareTo(this.quantity) > 0) {
-            throw new IllegalArgumentException("Saldo insuficiente. Você possui apenas: " + this.quantity);
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Saldo insuficiente. Você possui apenas: " + this.quantity);
         }
 
         this.quantity = this.quantity.subtract(quantityToSell);

@@ -57,10 +57,16 @@ public class PositionService {
     }
 
     @Transactional
-    public void sellPosition(String assetId, BigDecimal quantity, String portfolioId, String ownerId) {
-        Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
-        Position position = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId).orElseThrow(() -> new IllegalArgumentException("portfolio ou ativo invalido"));
-        position.sellAsset(quantity);
+    public void sellPosition(PositionType type,String assetId, BigDecimal quantity, String portfolioId, String ownerId) {
+            Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
+            if (type == PositionType.CRIPTO) {
+                Position position = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId.toLowerCase()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "portfolio ou ativo invalido"));
+                position.sellAsset(quantity);
+            }
+            else {
+                Position position = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId.toUpperCase()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "portfolio ou ativo invalido"));
+                position.sellAsset(quantity);
+            }
     }
 
 
