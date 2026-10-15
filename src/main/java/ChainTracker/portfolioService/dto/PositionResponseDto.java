@@ -20,9 +20,9 @@ public record PositionResponseDto(
         quantity = formatQuantity(quantity);
         averagePrice = formatPrice(averagePrice);
 
-        positionValue = formatMoney(positionValue);
-        pnlAmount = formatMoney(pnlAmount);
-        pnlPercentage = formatPercentage(pnlPercentage);
+        positionValue = TwoDecimals.round(positionValue);
+        pnlAmount = TwoDecimals.round(pnlAmount);
+        pnlPercentage = TwoDecimals.round(pnlPercentage);
     }
 
     private static BigDecimal formatQuantity(BigDecimal value) {
@@ -53,27 +53,5 @@ public record PositionResponseDto(
         return value
                 .setScale(8, RoundingMode.HALF_UP)
                 .stripTrailingZeros();
-    }
-
-    private static BigDecimal formatMoney(BigDecimal value) {
-        if (value == null) {
-            return null;
-        }
-
-        return value.setScale(
-                2,
-                RoundingMode.HALF_UP
-        );
-    }
-
-    private static BigDecimal formatPercentage(BigDecimal value) {
-        if (value == null) {
-            return null;
-        }
-
-        return value.setScale(
-                2,
-                RoundingMode.HALF_UP
-        );
     }
 }
