@@ -38,7 +38,7 @@ public class PositionService {
             position.buyAsset(quantity, currentPrice);
             position.setName(cryptoMarketData.name());
             position.setType(PositionType.CRIPTO);
-            positionRepository.save(position);
+            positionRepository.saveAndFlush(position);
             return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice), position.pnlValue(currentPrice), position.calculePNL(currentPrice));
 
         } else {
