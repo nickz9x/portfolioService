@@ -28,7 +28,7 @@ public class PositionService {
     public PositionResponseDto createCryptoPosition(String assetId, BigDecimal quantity, String portfolioId, String ownerId) {
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
         CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(assetId);
-        if (cryptoMarketData == null) {
+        if (cryptoMarketData == null || cryptoMarketData.symbol() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         BigDecimal currentPrice = cryptoMarketData.currentPrice();
@@ -67,7 +67,7 @@ public class PositionService {
     @Transactional
     public PositionResponseDto createStockPosition(String symbol, BigDecimal quantity, String portfolioId, String ownerId) {
         StockDataResponse stockData = dataService.getStockData(symbol);
-        if (stockData == null) {
+        if (stockData == null || stockData.symbol() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
