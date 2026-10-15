@@ -4,8 +4,7 @@ package ChainTracker.portfolioService.controller;
 import ChainTracker.portfolioService.dto.AlertRequestDto;
 import ChainTracker.portfolioService.service.AlertService;
 import jakarta.validation.Valid;
-import lombok.AllArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,9 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/alert")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class AlertController {
-    private AlertService alertService;
+    private final AlertService alertService;
 
 
     @PostMapping

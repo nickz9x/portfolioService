@@ -2,22 +2,50 @@ package ChainTracker.portfolioService.service;
 
 import ChainTracker.portfolioService.dto.AlertKafkaDto;
 import ChainTracker.portfolioService.dto.AlertRequestDto;
-import lombok.AllArgsConstructor;
+import ChainTracker.portfolioService.dto.CryptoDataResponse;
+import ChainTracker.portfolioService.dto.StockDataResponse;
+import ChainTracker.portfolioService.enums.PositionType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class AlertService {
-    private KafkaTemplate<String, AlertKafkaDto> kafkaTemplate;
-    private ObjectMapper objectMapper;
+    private final KafkaTemplate<String, AlertKafkaDto> kafkaTemplate;
+    private final DataService dataService;
 
 
+    public void createAlert(AlertRequestDto dto, String userId) {
+        String assetId;
 
+        if (dto.type() == PositionType.CRIPTO) {
+            CryptoDataResponse cryptoData = dataService.getCryptoData(dto.assetId());
+            if (cryptoData == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            }
+            assetId = cryptoData.assetId();
+        }
+        else {
+            StockDataResponse stockData = dataService.getStockData(dto.assetId().toUpperCase());
+            if (stockData == null){
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
 
-    public void createAlert(AlertRequestDto dto, String userId){
-        AlertKafkaDto kafkaDto = new AlertKafkaDto(userId,dto.assetId(),dto.price());
-        kafkaTemplate.send("alert.created",userId,kafkaDto);
+            }
+            assetId = stockData.symbol();
+        }
+        AlertKafkaDto kafkaDto = new AlertKafkaDto(userId, assetId, dto.price());
+
+        kafkaTemplate.send("alert.created", userId, kafkaDto).whenComplete((result, ex) -> {
+            if (ex == null) {
+                // Executado em background quando o Kafka confirmar
+                System.out.println("Alerta gravado com sucesso no Kafka para o usuário: " + userId);
+            } else {
+                // Executado em background se o Kafka falhar
+                throw new ResponseStatusException(HttpStatus.EXPECTATION_FAILED);
+            }
+        });
     }
 }
