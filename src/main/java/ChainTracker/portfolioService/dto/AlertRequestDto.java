@@ -6,5 +6,5 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 
-public record AlertRequestDto(@NotBlank String assetId, @NotNull BigDecimal price, PositionType type) {
+public record AlertRequestDto(@NotBlank String assetId, @NotNull BigDecimal price, @NotNull PositionType type) {
 }
