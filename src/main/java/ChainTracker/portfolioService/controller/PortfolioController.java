@@ -39,5 +39,9 @@ public class PortfolioController {
     public ResponseEntity<List<PortfolioResponseDto>> listAllPortfolioByOwnerId(@AuthenticationPrincipal Jwt jwt){
         return ResponseEntity.ok(portfolioService.listAllPortfolio(jwt.getSubject()));
     }
+    @GetMapping("/bot")
+    public ResponseEntity<List<PortfolioResponseDto>> listAllPortfolioByOwnerIdbot(@RequestParam String userId){
+        return ResponseEntity.ok(portfolioService.listAllPortfolio(userId));
+    }
 
 }
