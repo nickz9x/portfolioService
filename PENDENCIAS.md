@@ -65,7 +65,7 @@ do identity-service ainda tem o valor literal, e o arquivo segue rastreado.
    arquivo não apaga o histórico; reescrever com `filter-repo` só compensa se o
    repositório virar público.
 
-### 27. As V4–V7 quebram o banco vazio
+### ✅ 27. As V4–V7 quebram o banco vazio
 
 **Onde:** `db/migration/V4__add_column_enchange_into_position_table.sql` até
 `V7__add_column_type_into_position.sql` (commit de 2026-10-08).
@@ -98,6 +98,16 @@ caminhos. Quanto ao typo do nome (`enchange` → `exchange`), renomear só junto
 um `flyway repair`: o nome aplicado está em `flyway_schema_history.script` e um
 rename sem repair faz o validate acusar "applied migration not resolved locally"
 no boot seguinte.
+
+**Resolvido em 2026-10-18:** as quatro ganharam `if not exists`, com o
+`varchar(255)` da V1/entidade em `symbol` e `type` (antes `varchar(10)` e
+`varchar(25)`). A V8 alinha o banco de dev que já tinha as colunas erradas:
+converte `symbol` para `varchar(255)` e recria o `position_type_check` se ele
+não existir. Banco vazio roda V1→V8 sem erro; o typo do nome ficou como estava.
+
+**Atenção:** os checksums da V4–V7 mudaram. Banco que já aplicou as versões
+antigas precisa de `flyway repair` (ou ser recriado) antes do próximo boot;
+sem isso o validate acusa checksum mismatch.
 
 ### 28. `application.yaml` está com o Flyway desligado no working tree
 
