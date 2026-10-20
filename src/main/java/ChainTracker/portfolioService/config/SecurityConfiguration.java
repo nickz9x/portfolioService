@@ -17,7 +17,7 @@ public class SecurityConfiguration {
             .csrf(csrf -> csrf.disable())
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
             .authorizeHttpRequests(auth -> {
-                auth.requestMatchers("/api/portfolio/bot").permitAll();
+                auth.requestMatchers("/api/portfolio/bot/**").permitAll();
                 auth.anyRequest().authenticated();
             });
         return http.build();
