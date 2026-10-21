@@ -4,6 +4,7 @@ import ChainTracker.portfolioService.dto.PortfolioResponseDto;
 import ChainTracker.portfolioService.dto.PositionTotalResume;
 import ChainTracker.portfolioService.model.Portfolio;
 import ChainTracker.portfolioService.repository.PortfolioRepository;
+import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,17 @@ public class PortfolioService {
         portfolio.setName(name);
         portfolio.setOwnerId(ownerId);
         return repository.save(portfolio);
+    }
+
+    /**
+     * Apaga primeiro as posicoes e depois o portfolio, na mesma transacao.
+     * O findByIdAndOwner garante que ninguem exclui portfolio de outro usuario.
+     */
+    @Transactional
+    public void deletePortfolio(String id, String ownerId) {
+        Portfolio portfolio = findByIdAndOwner(id, ownerId);
+        positionService.deleteAllByPortfolio(portfolio.getId());
+        repository.delete(portfolio);
     }
 
     // 404 e nao 403 quando o portfolio existe mas e de outro usuario:

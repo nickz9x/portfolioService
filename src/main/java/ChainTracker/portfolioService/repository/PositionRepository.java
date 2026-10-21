@@ -3,6 +3,7 @@ package ChainTracker.portfolioService.repository;
 import ChainTracker.portfolioService.model.Position;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,4 +33,12 @@ public interface PositionRepository extends JpaRepository<Position,Long> {
      */
     @EntityGraph(attributePaths = "portfolio")
     List<Position> findAllByPortfolioId(String portfolioId);
+
+    /**
+     * Remove em bloco antes de apagar o portfolio: a FK position.portfolio_id
+     * impede excluir o portfolio enquanto houver posicoes.
+     */
+    @Modifying
+    @Query("delete from Position p where p.portfolio.id = :portfolioId")
+    void deleteAllByPortfolioId(@Param("portfolioId") String portfolioId);
 }

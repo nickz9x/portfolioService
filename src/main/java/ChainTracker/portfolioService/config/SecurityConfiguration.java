@@ -17,6 +17,12 @@ public class SecurityConfiguration {
             .csrf(csrf -> csrf.disable())
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
             .authorizeHttpRequests(auth -> {
+                // Pagina de erro interna do Spring. Sem liberar, qualquer falha
+                // (inclusive um 404 do bot) vira 401 e esconde a causa real.
+                auth.requestMatchers("/error").permitAll();
+                // Prefixo unico das rotas duplicadas para o bot do Telegram.
+                // As rotas originais (/api/portfolio/**) exigem JWT.
+                auth.requestMatchers("/api/bot/**").permitAll();
                 auth.anyRequest().authenticated();
             });
         return http.build();
