@@ -22,7 +22,7 @@ public class SecurityConfiguration {
                 auth.requestMatchers("/error").permitAll();
                 // Prefixo unico das rotas duplicadas para o bot do Telegram.
                 // As rotas originais (/api/portfolio/**) exigem JWT.
-                auth.requestMatchers("/api/bot/**").permitAll();
+                auth.requestMatchers("/api/bot/**").hasAuthority("SCOPE_bot");
                 auth.anyRequest().authenticated();
             });
         return http.build();
