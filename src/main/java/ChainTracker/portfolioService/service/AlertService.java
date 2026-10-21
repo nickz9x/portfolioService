@@ -22,7 +22,10 @@ public class AlertService {
         String assetId;
 
         if (dto.type() == PositionType.CRIPTO) {
-            CryptoDataResponse cryptoData = dataService.getCryptoData(dto.assetId());
+            // Aceita id, ticker ou nome e normaliza para o id do CoinGecko,
+            // igual ao fluxo de criacao de posicao.
+            String cryptoId = dataService.resolveCryptoAssetId(dto.assetId());
+            CryptoDataResponse cryptoData = dataService.getCryptoData(cryptoId);
             if (cryptoData == null) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
             }

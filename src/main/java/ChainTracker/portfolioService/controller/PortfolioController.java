@@ -30,6 +30,12 @@ public class PortfolioController {
         return ResponseEntity.status(HttpStatus.CREATED).body(PortfolioResponseDto.from(portfolio));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+        portfolioService.deletePortfolio(id, jwt.getSubject());
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/resume")
     public ResponseEntity<PositionTotalResume>getPortfolioResume(@PathVariable String id, @AuthenticationPrincipal Jwt jwt){
         return ResponseEntity.ok(portfolioService.getResume(id, jwt.getSubject()));

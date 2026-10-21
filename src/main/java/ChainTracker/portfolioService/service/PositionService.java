@@ -27,23 +27,24 @@ public class PositionService {
     @Transactional
     public PositionResponseDto createCryptoPosition(String assetId, BigDecimal quantity, String portfolioId, String ownerId) {
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
-        CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(assetId);
+        String cryptoId = dataService.resolveCryptoAssetId(assetId);
+        CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(cryptoId);
         if (cryptoMarketData == null || cryptoMarketData.symbol() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         BigDecimal currentPrice = cryptoMarketData.currentPrice();
-        Optional<Position> cryptoPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId);
+        Optional<Position> cryptoPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), cryptoId);
         if (cryptoPosition.isPresent()) {
             Position position = cryptoPosition.get();
             position.buyAsset(quantity, currentPrice);
             position.setName(cryptoMarketData.name());
             position.setType(PositionType.CRIPTO);
             positionRepository.saveAndFlush(position);
-            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice), position.pnlValue(currentPrice), position.calculePNL(currentPrice));
+            return new PositionResponseDto(cryptoId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice), position.pnlValue(currentPrice), position.calculePNL(currentPrice));
 
         } else {
             Position position = new Position();
-            position.setAssetId(assetId);
+            position.setAssetId(cryptoId);
             position.setQuantity(quantity);
             position.setPortfolio(portfolio);
             position.setSymbol(cryptoMarketData.symbol());
@@ -52,8 +53,13 @@ public class PositionService {
             position.setType(PositionType.CRIPTO);
             positionRepository.save(position);
 
-            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice), position.pnlValue(currentPrice), position.calculePNL(currentPrice));
+            return new PositionResponseDto(cryptoId, cryptoMarketData.symbol(), cryptoMarketData.name(), position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice), position.pnlValue(currentPrice), position.calculePNL(currentPrice));
         }
+    }
+
+    @Transactional
+    public void deleteAllByPortfolio(String portfolioId) {
+        positionRepository.deleteAllByPortfolioId(portfolioId);
     }
 
     @Transactional
@@ -135,11 +141,11 @@ public class PositionService {
             }
             return cryptoMarketData.currentPrice();
         }
-        StockDataResponse stockData = dataService.getStockData(position.getSymbol());
-        if (stockData == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
-        StockMarketData stockMarketData = dataService.getStockMarketData(stockData.symbol());
+        // Usa o symbol ja gravado na posicao (canonico desde a criacao) em vez
+        // de passar por /internal/data/stock so para normalizar de novo: essa
+        // rota exige token, e o fluxo do bot consulta posicoes sem JWT.
+        String symbol = position.getSymbol() != null ? position.getSymbol() : position.getAssetId();
+        StockMarketData stockMarketData = dataService.getStockMarketData(symbol);
         if (stockMarketData == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
@@ -201,8 +207,8 @@ public class PositionService {
                 : pnlValue.divide(totalCost, 12, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
 
         return new PositionTotalResume(
-                best == null ? null : best.position().getSymbol(),
-                worst == null ? null : worst.position().getSymbol(),
+                best == null ? null : best.position().getName() + " (" + best.position().getSymbol() + ")",
+                worst == null ? null : worst.position().getName() + " (" + worst.position().getSymbol() + ")",
                 pnlValue,
                 pnlPercentage,
                 totalValue);
@@ -211,25 +217,26 @@ public class PositionService {
     @Transactional
     public PositionResponseDto createCryptoWithCustomPricePosition(String assetId, BigDecimal quantity, BigDecimal price, String portfolioId, String ownerId) {
         Portfolio portfolio = portfolioService.findByIdAndOwner(portfolioId, ownerId);
-        CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(assetId);
+        String cryptoId = dataService.resolveCryptoAssetId(assetId);
+        CryptoMarketData cryptoMarketData = dataService.getCryptoMarketData(cryptoId);
         if (cryptoMarketData == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         BigDecimal currentPrice = cryptoMarketData.currentPrice();
-        Optional<Position> cryptoPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), assetId);
+        Optional<Position> cryptoPosition = positionRepository.findByPortfolioIdAndAssetId(portfolio.getId(), cryptoId);
         if (cryptoPosition.isPresent()) {
             Position position = cryptoPosition.get();
             position.buyAsset(quantity, price);
             position.setName(cryptoMarketData.name());
             position.setType(PositionType.CRIPTO);
             positionRepository.save(position);
-            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(),
+            return new PositionResponseDto(cryptoId, cryptoMarketData.symbol(), cryptoMarketData.name(),
                     position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),
                     position.pnlValue(currentPrice), position.calculePNL(currentPrice));
 
         } else {
             Position position = new Position();
-            position.setAssetId(assetId);
+            position.setAssetId(cryptoId);
             position.setQuantity(quantity);
             position.setPortfolio(portfolio);
             position.setSymbol(cryptoMarketData.symbol());
@@ -238,7 +245,7 @@ public class PositionService {
             position.setType(PositionType.CRIPTO);
             positionRepository.save(position);
 
-            return new PositionResponseDto(assetId, cryptoMarketData.symbol(), cryptoMarketData.name(),
+            return new PositionResponseDto(cryptoId, cryptoMarketData.symbol(), cryptoMarketData.name(),
                     position.getQuantity(), position.getAveragePrice(), position.positionValue(currentPrice),
                     position.pnlValue(currentPrice), position.calculePNL(currentPrice));
         }
@@ -279,4 +286,5 @@ public class PositionService {
                     position.pnlValue(currentPrice), position.calculePNL(currentPrice));
         }
     }
+
 }
