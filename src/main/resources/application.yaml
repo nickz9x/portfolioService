@@ -9,14 +9,14 @@ spring:
   data:
     redis:
       password: admin
-      host: localhost
+      host: my-redis
       port: 6379
       type: redis
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://keycloak:8081/realms/ChainTracker
+          issuer-uri: http://keycloak:8080/realms/ChainTracker
   kafka:
     bootstrap-servers: kafka:9092
     producer:
