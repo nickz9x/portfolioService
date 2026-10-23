@@ -3,7 +3,7 @@ spring:
   application:
     name: portfolioService
   datasource:
-    url: jdbc:postgresql://portfolio-service-db:5434/portfolioService
+    url: jdbc:postgresql://portfolio-service-db:5432/portfolioService
     username: user
     password: postgres
   data:
@@ -39,5 +39,6 @@ spring:
     # acontece: as migrations rodam normalmente desde a V1.
     baseline-on-migrate: true
     baseline-version: 1
+    enabled: true
 server:
   port: 8087
