@@ -16,7 +16,7 @@ import java.util.List;
 @Component
 public class AssetMarketDataClient {
     private final RestClient restClient;
-    private String url = "http://localhost:8082/api";
+    private String url = "http://assetdatamarket-service:3003/api";
 
     public AssetMarketDataClient(RestClient.Builder restClientBuilder, JwtForwardingInterceptor jwtForwardingInterceptor) {
         this.restClient = restClientBuilder
