@@ -20,6 +20,7 @@ public class SecurityConfiguration {
                 // Pagina de erro interna do Spring. Sem liberar, qualquer falha
                 // (inclusive um 404 do bot) vira 401 e esconde a causa real.
                 auth.requestMatchers("/error").permitAll();
+                auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll();
                 // Prefixo unico das rotas duplicadas para o bot do Telegram.
                 // As rotas originais (/api/portfolio/**) exigem JWT.
                 auth.requestMatchers("/api/bot/**").hasAuthority("SCOPE_bot");
